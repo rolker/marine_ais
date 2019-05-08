@@ -3,7 +3,6 @@
 import serial
 import socket
 import rospy
-import rosbag
 from  sensor_msgs.msg import NavSatFix
 from sensor_msgs.msg import TimeReference
 from marine_msgs.msg import NavEulerStamped
