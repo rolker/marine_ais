@@ -41,7 +41,7 @@ def ais_listener():
                 udp_out.sendto(nmea_in, (output_address,output_port))
         else:
             nmea_in,addr = udp_in.recvfrom(2048)
-            print addr, nmea_in
+            #print addr, nmea_in
             nmea_ins = nmea_in.split('\n')
         now = rospy.get_rostime()
         for nmea_in in nmea_ins:
