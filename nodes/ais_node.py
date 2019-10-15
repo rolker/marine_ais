@@ -8,8 +8,9 @@ from sensor_msgs.msg import TimeReference
 from marine_msgs.msg import NavEulerStamped
 import datetime
 import calendar
+import sys
 
-def ais_listener():
+def ais_listener(logdir=None):
     position_pub = rospy.Publisher('/base/position',NavSatFix,queue_size=10)
     timeref_pub = rospy.Publisher('/base/time_reference',TimeReference,queue_size=10)
     rospy.init_node('ais')
@@ -19,6 +20,12 @@ def ais_listener():
     input_port = int(rospy.get_param('/ais/input_port',0))
     output_port = int(rospy.get_param('/ais/output',0))
     output_address = rospy.get_param('/ais/output_address','<broadcast>')
+    
+    if logdir is not None:
+        logfile = file(logdir+'.'.join(datetime.datetime.utcnow().isoformat().split(':'))+'_ais.log','w')
+    else:
+        logfile = None
+    
     
     if input_type == 'serial':
         serial_in = serial.Serial(input_address, int(input_speed))
@@ -44,6 +51,8 @@ def ais_listener():
             nmea_ins = nmea_in.split('\n')
         now = rospy.get_rostime()
         for nmea_in in nmea_ins:
+            if logfile is not None:
+                logfile.write(datetime.datetime.utcnow().isoformat()+','+nmea_in+'\n')
             nmea_parts = nmea_in.strip().split(',')
             if len(nmea_parts):
                 #print nmea_parts
@@ -92,7 +101,11 @@ def ais_listener():
 
 if __name__ == '__main__':
     try:
-        ais_listener()
+        logdir = None
+        argv = rospy.myargv(argv=sys.argv)
+        if len(argv) > 1:
+            logdir = argv[1]
+        ais_listener(logdir)
     except rospy.ROSInterruptException:
         pass
 
