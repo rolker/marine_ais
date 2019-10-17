@@ -13,6 +13,7 @@ import datetime
 import calendar
 import sys
 import ais.decoder
+import math
 
 def ais_listener(logdir=None):
     position_pub = rospy.Publisher('/base/position',NavSatFix,queue_size=10)
@@ -98,7 +99,7 @@ def ais_listener(logdir=None):
                         ais_pub.publish(c)
                     raw = Heartbeat()
                     for k,v in m.iteritems():
-                        raw.values.append(KeyValue(k,v))
+                        raw.values.append(KeyValue(k,str(v)))
                     ais_raw_pub.publish(raw)
                         
                         
