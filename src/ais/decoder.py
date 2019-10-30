@@ -376,19 +376,27 @@ if __name__ == '__main__':
     
     d = AISDecoder()
     
+    total = 0
+    
     for l in file(sys.argv[1]).readlines():
         parts = l.strip().split(',',1)
         if len(parts) > 1 and len(parts[1]) > 1:
             if parts[1].startswith('!AIVDM'):
                 d.addNMEA(parts[1])
                 for m in d.popMessages():
-                    if m['type'] in (21,):
-                        print 'type:',m['type']
-                        for k,v in m.iteritems():
-                            if k != 'type':
-                                print '\t',k+':\t',v
+                    total += 1
+                    if total%10000 == 0:
+                        print total
+    print total,'ais messages seen.'
     print 'types seen:'
     for k,v in d.types_seen.iteritems():
         print '\ttype:',k,'count:',v
     print 'types not decoded:',d.types_not_decoded
-    print d.mmsi_db
+    print 'ships seen:'
+    for k in d.mmsi_db.iterkeys():
+        if 'shipname' in d.mmsi_db[k]:
+            print '\t',k, d.mmsi_db[k]['shipname'],
+            if 'callsign' in d.mmsi_db[k]:
+                print '(',d.mmsi_db[k]['callsign'],')'
+            else:
+                print
