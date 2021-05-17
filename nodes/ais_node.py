@@ -32,7 +32,7 @@ def ais_listener(logdir=None):
     ais_decoder = ais.decoder.AISDecoder()
     
     if logdir is not None:
-        logfile = file(logdir+'.'.join(datetime.datetime.utcnow().isoformat().split(':'))+'_ais.log','w')
+        logfile = open(logdir+'.'.join(datetime.datetime.utcnow().isoformat().split(':'))+'_ais.log','w')
     else:
         logfile = None
     
@@ -52,7 +52,7 @@ def ais_listener(logdir=None):
     while not rospy.is_shutdown():
         if input_type == 'serial':
             nmea_ins = (serial_in.readline(),)
-            #print nmea_in
+            #print( nmea_ins)
             if udp_out is not None:
                 udp_out.sendto(nmea_in, (output_address,output_port))
         else:
@@ -60,12 +60,16 @@ def ais_listener(logdir=None):
             #print addr, nmea_in
             nmea_ins = nmea_in.split('\n')
         now = rospy.get_rostime()
-        for nmea_in in nmea_ins:
+        for nmea_in_b in nmea_ins:
+            nmea_in = nmea_in_b.decode('utf-8')
+            #print(nmea_in)
             if logfile is not None:
                 logfile.write(datetime.datetime.utcnow().isoformat()+','+nmea_in+'\n')
             if nmea_in.startswith('!AIVDM'):
+                #print(nmea_in)
                 ais_decoder.addNMEA(nmea_in.strip())
                 msgs = ais_decoder.popMessages()
+                #print(msgs)
                 for m in msgs:
                     if m['type'] in (1,2,3,18,19): #position reports
                         c = Contact()
@@ -99,7 +103,7 @@ def ais_listener(logdir=None):
                             c.dimension_to_stbd = ais_decoder.mmsi_db[m['mmsi']]['to_starboard']
                         ais_pub.publish(c)
                     raw = Heartbeat()
-                    for k,v in m.iteritems():
+                    for k,v in m.items():
                         raw.values.append(KeyValue(k,str(v)))
                     ais_raw_pub.publish(raw)
                         

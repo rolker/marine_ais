@@ -12,7 +12,8 @@ class AISDecoder:
 
     def addNMEA(self, nmea):
         parts = nmea.split(',')
-        if len(parts) == 7:
+        #print(parts)
+        if len(parts) >= 7:
             fragment_count = int(parts[1])
             fragment_number = int(parts[2])
             message_id = parts[3]
@@ -78,7 +79,7 @@ class AISDecoder:
         self.decodedMessages.append(msg)
         if not msg['mmsi'] in self.mmsi_db:
             self.mmsi_db[msg['mmsi']] = {}
-        for k,v in msg.iteritems():
+        for k,v in msg.items():
             self.mmsi_db[msg['mmsi']][k] = v
         
 
