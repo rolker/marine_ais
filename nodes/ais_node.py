@@ -21,12 +21,13 @@ def ais_listener(logdir=None):
     ais_pub = rospy.Publisher('/base/ais/contacts',Contact,queue_size=10)
     ais_raw_pub = rospy.Publisher('/base/ais/raw',Heartbeat,queue_size=10)
     rospy.init_node('ais')
-    input_type = rospy.get_param('/ais/input_type')
-    input_address = rospy.get_param('/ais/input','')
-    input_speed = rospy.get_param('/ais/input_speed',0)
-    input_port = int(rospy.get_param('/ais/input_port',0))
-    output_port = int(rospy.get_param('/ais/output',0))
-    output_address = rospy.get_param('/ais/output_address','<broadcast>')
+
+    input_type = rospy.get_param('~input_type')
+    input_address = rospy.get_param('~input','')
+    input_speed = rospy.get_param('~input_speed',0)
+    input_port = int(rospy.get_param('~input_port',0))
+    output_port = int(rospy.get_param('~output',0))
+    output_address = rospy.get_param('~output_address','<broadcast>')
     
     ais_decoder = ais.decoder.AISDecoder()
     
