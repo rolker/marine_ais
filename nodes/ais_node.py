@@ -32,7 +32,7 @@ def ais_listener(logdir=None):
     ais_decoder = ais.decoder.AISDecoder()
     
     if logdir is not None:
-        logfile = open(logdir+'.'.join(datetime.datetime.utcnow().isoformat().split(':'))+'_ais.log','w')
+        logfile = open(logdir+'ais_'+'.'.join(datetime.datetime.utcnow().isoformat().split(':'))+'.log','w')
     else:
         logfile = None
     
