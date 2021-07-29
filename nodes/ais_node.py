@@ -66,13 +66,16 @@ def ais_listener(logdir=None):
             try:
                 nmea_in,addr = udp_in.recvfrom(2048)
                 #print addr, nmea_in
-                nmea_ins = nmea_in.split('\n')
+                nmea_ins = nmea_in.decode('utf-8').split('\n')
             except socket.timeout:
                 nmea_ins = None
         now = rospy.get_rostime()
         if nmea_ins is not None:
             for nmea_in_b in nmea_ins:
-                nmea_in = nmea_in_b.decode('utf-8')
+                try:
+                    nmea_in = nmea_in_b.decode('utf-8')
+                except AttributeError:
+                    nmea_in = nmea_in_b
                 #print(nmea_in)
                 if logfile is not None:
                     logfile.write(datetime.datetime.utcnow().isoformat()+','+nmea_in+'\n')
