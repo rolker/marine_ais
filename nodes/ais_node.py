@@ -24,7 +24,7 @@ def ais_listener(logdir=None):
     timeref_pub = rospy.Publisher('ais/time_reference',TimeReference,queue_size=10)
     orientation_pub = rospy.Publisher('ais/orientation', Imu, queue_size=10)
     velocity_pub = rospy.Publisher('ais/velocity', TwistWithCovarianceStamped, queue_size=10)
-    ais_pub = rospy.Publisher('ais/contacts',Contact,queue_size=10)
+    ais_pub = rospy.Publisher('ais/contact',Contact,queue_size=10)
     ais_raw_pub = rospy.Publisher('ais/raw',Heartbeat,queue_size=10)
 
     input_type = rospy.get_param('~input_type')
