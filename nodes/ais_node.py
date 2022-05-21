@@ -116,7 +116,10 @@ def ais_listener(logdir=None):
                                 c.dimension_to_port = ais_decoder.mmsi_db[m['mmsi']]['to_port']
                             if 'to_starboard' in ais_decoder.mmsi_db[m['mmsi']]:
                                 c.dimension_to_stbd = ais_decoder.mmsi_db[m['mmsi']]['to_starboard']
-                            ais_pub.publish(c)
+                            try:
+                                ais_pub.publish(c)
+                            except rospy.exceptions.ROSSerializationException:
+                                pass
                         raw = Heartbeat()
                         for k,v in m.items():
                             raw.values.append(KeyValue(k,str(v)))

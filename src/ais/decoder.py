@@ -261,7 +261,8 @@ class AISDecoder:
         ret['minute'] = self.decodeUnsignedInt(bits[288:293])
         ret['draught'] = self.decodeUnsignedInt(bits[294:302])/10.0
         ret['destination'] = self.decodeString(bits[302:422])
-        ret['dte'] = bits[422]
+        if len(bits) > 422:
+            ret['dte'] = bits[422]
 
         self.addMessage(ret)
 
