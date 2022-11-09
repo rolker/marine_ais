@@ -34,6 +34,8 @@ def ais_listener(logdir=None):
     output_port = int(rospy.get_param('~output',0))
     output_address = rospy.get_param('~output_address','<broadcast>')
     frame_id = rospy.get_param("~frame_id",'ais')
+    if rospy.has_param("~log_directory"):
+        logdir = rospy.get_param("~log_directory")
     
     ais_decoder = ais.decoder.AISDecoder()
     
@@ -78,7 +80,8 @@ def ais_listener(logdir=None):
                     nmea_in = nmea_in_b
                 #print(nmea_in)
                 if logfile is not None:
-                    logfile.write(datetime.datetime.utcnow().isoformat()+','+nmea_in+'\n')
+                    logfile.write(datetime.datetime.utcnow().isoformat()+','+nmea_in.strip()+'\n')
+                    logfile.flush()
                 if nmea_in.startswith('!AIVDM'):
                     #print(nmea_in)
                     ais_decoder.addNMEA(nmea_in.strip())
