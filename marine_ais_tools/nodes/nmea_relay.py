@@ -98,11 +98,12 @@ def nmea_listener(logdir=None):
             if logfile is not None:
                 logfile.write(datetime.datetime.fromtimestamp(now.to_sec()).isoformat()+','+nmea+'\n')
                 logfile.flush()
-            sentence = Sentence()
-            sentence.header.stamp = now
-            sentence.header.frame_id = frame_id
-            sentence.sentence = nmea
-            nmea_pub.publish(sentence)
+            if len(nmea) > 0:
+                sentence = Sentence()
+                sentence.header.stamp = now
+                sentence.header.frame_id = frame_id
+                sentence.sentence = nmea
+                nmea_pub.publish(sentence)
 
 if __name__ == '__main__':
     try:
