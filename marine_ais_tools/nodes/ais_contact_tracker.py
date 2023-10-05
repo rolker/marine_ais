@@ -3,12 +3,17 @@
 import rospy
 from marine_ais_msgs.msg import AIS, AISContact
 from geometry_msgs.msg import Polygon, Point32
+from geographic_msgs.msg import GeoPointStamped
 
 import copy
 
 rospy.init_node('ais_contact_tracker')
 
 contacts_pub = rospy.Publisher('contacts', AISContact, queue_size=10)
+
+# added to track Mesobot, which uses an AIS beacon that transmits as an AtoN
+# setting frame_id to id(mmsi) as a quick solution
+aton_pub = rospy.Publisher('atons', GeoPointStamped, queue_size=10)
 
 contacts = {}
 
@@ -75,6 +80,13 @@ def aisCallback(msg):
             # todo, figure out covariances
 
             contacts_pub.publish(contacts[msg.id])
+    if msg.message_id == 21:
+        #Aid to Navigation
+        aton = GeoPointStamped()
+        aton.header.stamp = msg.header.stamp
+        aton.header.frame_id = msg.id
+        aton.position = msg.navigation.pose.position
+        aton_pub.publish(aton)
 
 ais_message_sub = rospy.Subscriber('messages', AIS, aisCallback)            
 
