@@ -84,7 +84,7 @@ def aisCallback(msg):
         #Aid to Navigation
         aton = GeoPointStamped()
         aton.header.stamp = msg.header.stamp
-        aton.header.frame_id = msg.id
+        aton.header.frame_id = str(msg.id)
         aton.position = msg.navigation.pose.position
         aton_pub.publish(aton)
 
