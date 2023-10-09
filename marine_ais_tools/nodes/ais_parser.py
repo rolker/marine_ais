@@ -41,9 +41,13 @@ def nmeaCallback(msg):
             else:
                 a.navigation.pose.position.altitude = math.nan
 
-            if 'heading' in m and m['heading'] is not None:
-                yaw = math.radians(90.0-m['heading'])
-                a.navigation.pose.orientation = tf.transformations.quaternion_from_euler(yaw, 0, 0, 'rzyx')
+            if 'true_heading' in m and m['true_heading'] is not None:
+                yaw = math.radians(90.0-m['true_heading'])
+                q = tf.transformations.quaternion_from_euler(yaw, 0, 0, 'rzyx')
+                a.navigation.pose.orientation.x = q[0]
+                a.navigation.pose.orientation.y = q[1]
+                a.navigation.pose.orientation.z = q[2]
+                a.navigation.pose.orientation.w = q[3]
 
             if 'rate_of_turn' in m:
                 if m['rate_of_turn'] is None:
