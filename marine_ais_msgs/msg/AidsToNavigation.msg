@@ -66,5 +66,5 @@ uint8 status
 # 0 = default = real AtoN at indicated position;
 # 1 = virtual AtoN, does not physically exist(2).
 
-bool virtual
+bool virtual_aton
 

@@ -1,31 +1,40 @@
-cmake_minimum_required(VERSION 3.0.2)
+cmake_minimum_required(VERSION 3.8)
 project(marine_ais_msgs)
 
-find_package(catkin REQUIRED geographic_msgs message_generation std_msgs)
+set(CMAKE_CXX_STANDARD 17)
 
-add_message_files(
-  FILES
-  Addressed.msg
-  AidsToNavigation.msg
-  AIS.msg
-  AISContact.msg
-  Binary.msg
-  ChannelManagement.msg
-  ClassB.msg
-  Communication.msg
-  DataLinkReservationBlock.msg
-  Destination.msg
-  Navigation.msg
-  NavigationalStatus.msg
-  Static.msg
-  Voyage.msg
+find_package(ament_cmake REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+find_package(geographic_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+
+set(MSG_FILES
+  msg/Addressed.msg
+  msg/AidsToNavigation.msg
+  msg/AIS.msg
+  msg/AISContact.msg
+  msg/Binary.msg
+  msg/ChannelManagement.msg
+  msg/ClassB.msg
+  msg/Communication.msg
+  msg/DataLinkReservationBlock.msg
+  msg/Destination.msg
+  msg/Navigation.msg
+  msg/NavigationalStatus.msg
+  msg/Static.msg
+  msg/Voyage.msg
 )
 
-generate_messages(
+rosidl_generate_interfaces(
+  ${PROJECT_NAME}
+  ${MSG_FILES}
   DEPENDENCIES
+  builtin_interfaces
   geographic_msgs
   std_msgs
 )
 
-catkin_package(
-  CATKIN_DEPENDS message_runtime)
+ament_export_dependencies(rosidl_default_runtime)
+
+ament_package()

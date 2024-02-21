@@ -3,7 +3,7 @@
 # It combines the latest position report with previously seen
 # static and voyage reports if available.
 
-Header header 
+std_msgs/Header header 
 
 # The AIS message type of the position report used to populate
 # the position parts of this message

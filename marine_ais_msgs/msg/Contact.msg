@@ -1,4 +1,4 @@
-Header header            # The frame_id
+std_msgs/Header header   # The frame_id
                          # refers to the AIS receiver antenna.
 
 

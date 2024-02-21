@@ -1,0 +1,22 @@
+<launch>
+  <arg name="namespace" default="ais"/>
+  <arg name="filename"/>
+  <arg name="rate" default="1.0"/>
+
+  <group>
+    <push_ros_namespace namespace="$(var namespace)"/>
+    <node pkg="marine_ais_tools" exec="nmea_replay">
+      <param name="filename" value="$(var filename)"/>
+      <param name="clock" value="True"/>
+      <param name="rate" value="$(var rate)"/>
+      <param name="/use_sim_time" type="bool" value="true"/>
+    </node>
+
+    <node pkg="marine_ais_tools" exec="ais_parser">
+      <param name="/use_sim_time" type="bool" value="true"/>
+    </node>
+    <node pkg="marine_ais_tools" exec="ais_contact_tracker">
+      <param name="/use_sim_time" type="bool" value="true"/>
+    </node>
+  </group>
+</launch>

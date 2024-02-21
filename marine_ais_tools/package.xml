@@ -1,5 +1,6 @@
 <?xml version="1.0"?>
-<package format="2">
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
   <name>marine_ais_tools</name>
   <version>0.0.0</version>
   <description>ROS nodes for decoding AIS data and publish to ROS messages</description>
@@ -8,13 +9,17 @@
 
   <license>BSD</license>
 
-  <buildtool_depend>catkin</buildtool_depend>
   <depend>geometry_msgs</depend>
   <depend>marine_ais_msgs</depend>
   <depend>nmea_msgs</depend>
-  <depend>rospy</depend>
   <depend>sensor_msgs</depend>
 
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
   <export>
+    <build_type>ament_python</build_type>
   </export>
 </package>

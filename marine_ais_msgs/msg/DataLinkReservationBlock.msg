@@ -21,7 +21,7 @@ uint8 number_of_slots
 # Time-out
 # Time-out value in minutes; 0 = not available(1)
 
-duration timeout
+builtin_interfaces/Duration timeout
 
 # Increment
 # Increment to repeat reservation block;

@@ -10,7 +10,7 @@
 #For SAR aircraft, the use of this field may be decided by the responsible
 # administration
 
-time estimated_time_of_arrival
+builtin_interfaces/Time estimated_time_of_arrival
 
 
 # message 5

@@ -9,7 +9,7 @@
 # was received by the ROS driver.
 # The frame_id refers to the AIS receiver antenna location.
 
-Header header 
+std_msgs/Header header 
 
 # The following are the defined AIS messages.
 # Some data members are only valid for some message ids.
@@ -120,7 +120,7 @@ ChannelManagement channel_management
 
 
 # messages 4,11
-time utc_time
+builtin_interfaces/Time utc_time
 
 # message 4,11
 # Transmission control for long range broadcast message
