@@ -1,0 +1,10 @@
+nmea_relay:
+  ros__parameters:
+    frame_id: nmea
+    input_type: serial
+    input_address: /dev/ttyACM0
+    input_speed: 38400
+    input_port: 0
+    output_address: 127.0.0.1
+    output_port: 0
+    log_directory: ''

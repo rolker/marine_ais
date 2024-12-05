@@ -29,7 +29,7 @@ class AISParser(rclpy.node.Node):
         if msg.sentence.startswith('!AIVDM'):
             self.ais_decoder.addNMEA(msg.sentence)
             msgs = self.ais_decoder.popMessages()
-            receive_time = datetime.datetime.utcfromtimestamp(msg.header.stamp.sec+msg.header.stamp.nanosec/float(rclpy.constants.S_TO_NS))
+            receive_time = datetime.datetime.fromtimestamp(msg.header.stamp.sec + msg.header.stamp.nanosec / float(rclpy.constants.S_TO_NS), datetime.timezone.utc)
             for m in msgs:
                 a = AIS()
                 a.header = msg.header

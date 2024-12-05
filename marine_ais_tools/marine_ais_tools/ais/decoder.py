@@ -129,7 +129,7 @@ def processRateOfTurn(message):
 
 def processSOG(message):
     sog = message['sog']
-    if sog == 1023:
+    if sog >= 1023:
         sog = None
     elif sog == 1022:
         sog = None
@@ -158,7 +158,7 @@ def processLatitude(message):
         message['latitude'] /= 600000.0
 
 def processHeading(message):
-    if message['true_heading'] == 511:
+    if message['true_heading'] >= 360:
         message['true_heading'] = None
 
 def processTimeStamp(message):
@@ -208,7 +208,7 @@ def processUTCTime(message):
     hour = decodeUnsignedInt(bits[23:28])
     minute = decodeUnsignedInt(bits[28:34])
     second = decodeUnsignedInt(bits[34:40])
-    if year == 0 or month == 0 or day == 0 or hour == 24 or minute == 60 or second == 60:
+    if year == 0 or year > 9999 or month == 0 or month > 12 or day == 0 or day > 31 or hour >= 24 or minute >= 60 or second >= 60:
         message['utc_time'] = None
         return
     try:
