@@ -19,7 +19,8 @@ def generate_launch_description():
         remappings=[
             ("/nmea", "/ais/raw"),
         ],
-        parameters=[config]
+        parameters=[config],
+        emulate_tty=True
     )
 
     ais_parser = Node(
@@ -30,6 +31,7 @@ def generate_launch_description():
             ("/nmea", "/ais/raw"),
             ("/messages", "/ais/messages"),
         ],
+        emulate_tty=True
     )
 
     return LaunchDescription([
