@@ -7,7 +7,7 @@
     This package defines message types for use with marine Automatic Identification Systems.
     </description>
     <maintainer email="roland@ccom.unh.edu">Roland Arsenault</maintainer>
-    <license>BSD</license>
+    <license>BSD-3-Clause</license>
     
     <buildtool_depend>rosidl_default_generators</buildtool_depend>
     

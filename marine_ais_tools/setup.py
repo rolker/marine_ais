@@ -21,7 +21,7 @@ setup(
     maintainer='Roland Arsenault',
     maintainer_email='roland@ccom.unh.edu',
     description='nodes for decoding and publishing AIS data',
-    license='BSD-2-Clause',
+    license='BSD-3-Clause',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
