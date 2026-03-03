@@ -7,7 +7,7 @@
 
   <maintainer email="roland@ccom.unh.edu">Roland Arsenault</maintainer>
 
-  <license>BSD</license>
+  <license>BSD-3-Clause</license>
 
   <depend>geometry_msgs</depend>
   <depend>marine_ais_msgs</depend>
