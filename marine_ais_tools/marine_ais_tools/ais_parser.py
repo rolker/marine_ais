@@ -1,35 +1,70 @@
 #!/usr/bin/env python3
 
-from typing import List
-import rclpy
-import rclpy.node
-import rclpy.constants
+# Copyright (c) 2016-2020, Roland Arsenault
+# All rights reserved.
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#    * Redistributions of source code must retain the above copyright notice,
+#    this list of conditions and the following disclaimer.
+#
+#    * Redistributions in binary form must reproduce the above copyright notice,
+#    this list of conditions and the following disclaimer in the documentation
+#    and/or other materials provided with the distribution.
+#
+#    * Neither the name of the copyright holder nor the names of its
+#    contributors may be used to endorse or promote products derived from
+#    this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
 
 
-from marine_ais_msgs.msg import AIS, Communication, Destination, DataLinkReservationBlock, Navigation, NavigationalStatus
-from nmea_msgs.msg import Sentence
-
-import transforms3d
-
-import marine_ais_tools.ais.decoder
-
-import math
 import datetime
+import math
+
+from marine_ais_msgs.msg import (
+    AIS, Communication, DataLinkReservationBlock,
+    Destination, Navigation, NavigationalStatus,
+)
+import marine_ais_tools.ais.decoder
+from nmea_msgs.msg import Sentence
+import rclpy
+import rclpy.constants
+import rclpy.node
+import transforms3d
 
 
 class AISParser(rclpy.node.Node):
+
     def __init__(self) -> None:
         super().__init__('ais_parser')
 
         self.ais_pub = self.create_publisher(AIS, 'messages', 10)
         self.ais_decoder = marine_ais_tools.ais.decoder.AISDecoder()
-        self.nmea_sub = self.create_subscription(Sentence, 'nmea', self.nmeaCallback, 10)            
+        self.nmea_sub = self.create_subscription(
+            Sentence, 'nmea', self.nmeaCallback, 10)
 
     def nmeaCallback(self, msg: Sentence):
         if msg.sentence.startswith('!AIVDM'):
             self.ais_decoder.addNMEA(msg.sentence)
             msgs = self.ais_decoder.popMessages()
-            receive_time = datetime.datetime.fromtimestamp(msg.header.stamp.sec + msg.header.stamp.nanosec / float(rclpy.constants.S_TO_NS), datetime.timezone.utc)
+            receive_time = datetime.datetime.fromtimestamp(
+                msg.header.stamp.sec +
+                msg.header.stamp.nanosec /
+                float(
+                    rclpy.constants.S_TO_NS),
+                datetime.timezone.utc)
             for m in msgs:
                 a = AIS()
                 a.header = msg.header
@@ -39,7 +74,8 @@ class AISParser(rclpy.node.Node):
 
                 # navigation
 
-                if 'latitude' in m and 'longitude' in m and m['latitude'] is not None and m['longitude'] is not None:
+                if 'latitude' in m and 'longitude' in m and m[
+                        'latitude'] is not None and m['longitude'] is not None:
                     a.navigation.pose.position.latitude = m['latitude']
                     a.navigation.pose.position.longitude = m['longitude']
                 else:
@@ -51,7 +87,7 @@ class AISParser(rclpy.node.Node):
                     a.navigation.pose.position.altitude = math.nan
 
                 if 'true_heading' in m and m['true_heading'] is not None:
-                    yaw = math.radians(90.0-m['true_heading'])
+                    yaw = math.radians(90.0 - m['true_heading'])
                     q = transforms3d.taitbryan.euler2quat(yaw, 0, 0)
                     a.navigation.pose.orientation.x = q[1]
                     a.navigation.pose.orientation.y = q[2]
@@ -67,17 +103,20 @@ class AISParser(rclpy.node.Node):
                             a.navigation.rate_of_turn_status = Navigation.RATE_OF_TURN_UNAVAILABLE
                     else:
                         # from deg/min clockwise to rad/sec counter clockwise
-                        a.navigation.twist.angular.z = math.radians(-m['rate_of_turn']/60.0)
+                        a.navigation.twist.angular.z = math.radians(
+                            -m['rate_of_turn'] / 60.0)
                         a.navigation.rate_of_turn_status = Navigation.RATE_OF_TURN_VALID
                 else:
                     a.navigation.twist.angular.z = math.nan
                     a.navigation.rate_of_turn_status = Navigation.RATE_OF_TURN_UNAVAILABLE
 
                 if 'sog' in m and m['sog'] is not None and 'cog' in m and m['cog'] is not None:
-                    sog_meters_per_second = m['sog']*0.514444
-                    cog_ros = math.radians(90.0-m['cog'])
-                    a.navigation.twist.linear.x = math.cos(cog_ros)*sog_meters_per_second
-                    a.navigation.twist.linear.y = math.sin(cog_ros)*sog_meters_per_second
+                    sog_meters_per_second = m['sog'] * 0.514444
+                    cog_ros = math.radians(90.0 - m['cog'])
+                    a.navigation.twist.linear.x = math.cos(
+                        cog_ros) * sog_meters_per_second
+                    a.navigation.twist.linear.y = math.sin(
+                        cog_ros) * sog_meters_per_second
                 else:
                     a.navigation.twist.linear.x = math.nan
                     a.navigation.twist.linear.y = math.nan
@@ -85,9 +124,12 @@ class AISParser(rclpy.node.Node):
                 if 'navigational_status' in m:
                     a.navigation.navigational_status.status = m['navigational_status']
                 else:
-                    a.navigation.navigational_status.status = NavigationalStatus.NAVIGATIONAL_STATUS_UNDEFINED
+                    a.navigation.navigational_status.status = (
+                        NavigationalStatus.NAVIGATIONAL_STATUS_UNDEFINED
+                    )
 
-                a.navigation.position_accuracy_high = 'position_accuracy' in m and m['position_accuracy'] == 1
+                a.navigation.position_accuracy_high = 'position_accuracy' in m and m[
+                    'position_accuracy'] == 1
 
                 if 'time_stamp' in m:
                     a.navigation.time_stamp = m['time_stamp']
@@ -95,32 +137,35 @@ class AISParser(rclpy.node.Node):
                     a.navigation.time_stamp = Navigation.TIME_STAMP_NOT_AVAIABLE
 
                 if 'special_manoeuvre_indicator' in m:
-                    a.navigation.navigational_status.special_manoeuvre = m['special_manoeuvre_indicator']
+                    a.navigation.navigational_status.special_manoeuvre = m[
+                        'special_manoeuvre_indicator']
 
                 a.navigation.raim_in_use = 'raim_flag' in m and m['raim_flag'] == 1
 
                 if 'position_fixing_device_type' in m:
                     a.navigation.position_fixing_device_type = m['position_fixing_device_type']
 
-                a.navigation.barometric_altitude = 'altitude_sensor' in m and m['altitude_sensor'] == 1
+                a.navigation.barometric_altitude = 'altitude_sensor' in m and m[
+                    'altitude_sensor'] == 1
 
                 if 'position_latency' in m:
                     a.navigation.position_latency = m['position_latency']
                 a.navigation.position_latency = 1
 
-                a.navigation.assigned_mode = 'assigned_mode_flag' in m and m['assigned_mode_flag'] ==1
+                a.navigation.assigned_mode = 'assigned_mode_flag' in m and m[
+                    'assigned_mode_flag'] == 1
 
                 # Static
 
                 if 'ais_version' in m:
                     a.static_info.ais_version = m['ais_version']
-                
+
                 if 'imo_number' in m:
                     a.static_info.imo_number = m['imo_number']
-                
+
                 if 'callsign' in m:
                     a.static_info.callsign = m['callsign']
-                
+
                 if 'name' in m:
                     a.static_info.name = m['name']
 
@@ -137,13 +182,16 @@ class AISParser(rclpy.node.Node):
                     a.static_info.reference_to_port_distance = m['reference_to_port_distance']
 
                 if 'reference_to_starboard_distance' in m:
-                    a.static_info.reference_to_starboard_distance = m['reference_to_starboard_distance']
+                    a.static_info.reference_to_starboard_distance = (
+                        m['reference_to_starboard_distance']
+                    )
 
-                if 'maximum_present_static_draught' in m and m['maximum_present_static_draught'] is not None:
+                if 'maximum_present_static_draught' in m and m[
+                        'maximum_present_static_draught'] is not None:
                     a.static_info.static_draught = m['maximum_present_static_draught']
 
                 if 'dte' in m:
-                    a.static_info.dte_ready =  m['dte'] == 0
+                    a.static_info.dte_ready = m['dte'] == 0
                 else:
                     a.static_info.dte_ready = False
 
@@ -156,7 +204,7 @@ class AISParser(rclpy.node.Node):
                 if 'eta_month' in m:
                     if m['eta_month'] > 0:
                         month == m['eta_month']
-                        if month < receive_time.month: # next year?
+                        if month < receive_time.month:  # next year?
                             year += 1
                         eta_parts_available = True
                 day = receive_time.day
@@ -177,7 +225,15 @@ class AISParser(rclpy.node.Node):
 
                 if eta_parts_available:
                     try:
-                        a.voyage.estimated_time_of_arrival = rclpy.time.Time(seconds=datetime.datetime(year, month, day, hour, minute, tzinfo=datetime.timezone.utc).timestamp()).to_msg()
+                        eta_dt = datetime.datetime(
+                            year, month, day, hour, minute,
+                            tzinfo=datetime.timezone.utc,
+                        )
+                        a.voyage.estimated_time_of_arrival = (
+                            rclpy.time.Time(
+                                seconds=eta_dt.timestamp()
+                            ).to_msg()
+                        )
                     except ValueError:
                         s = "Can't decode eta from:\n" + str(m)
                         self.get_logger().warn(s)
@@ -211,7 +267,7 @@ class AISParser(rclpy.node.Node):
                         if 'slot_offset_1_2' in m:
                             d.slot_offset = m['slot_offset_1_2']
                         a.addressed.destinations.append(d)
-                
+
                 if 'destination_id2' in m:
                     d = Destination()
                     d.id = m['destination_id2']
@@ -222,7 +278,7 @@ class AISParser(rclpy.node.Node):
                     if 'slot_offset_2_1' in m:
                         d.slot_offset = m['slot_offset_2_1']
                     a.addressed.destinations.append(d)
-                
+
                 if 'destination_id3' in m:
                     d = Destination()
                     d.id = m['destination_id3']
@@ -236,7 +292,7 @@ class AISParser(rclpy.node.Node):
                     if 'sequence_number_for_id4' in m:
                         d.sequence_number = m['sequence_number_for_id4']
                     a.addressed.destinations.append(d)
-                    
+
                 if 'destination_id_a' in m:
                     d = Destination()
                     d.id = m['destination_id_a']
@@ -245,7 +301,7 @@ class AISParser(rclpy.node.Node):
                     if 'increment_a' in m:
                         d.increment = m['increment_a']
                     a.addressed.destinations.append(d)
-                
+
                 if 'destination_id_b' in m:
                     d = Destination()
                     d.id = m['destination_id_b']
@@ -279,17 +335,19 @@ class AISParser(rclpy.node.Node):
 
                 a.class_b.cs_unit = 'class_b_unit_flag' in m and m['class_b_unit_flag'] == 1
 
-                a.class_b.display_equipped = 'class_b_display_flag' in m and m['class_b_display_flag'] == 1
+                a.class_b.display_equipped = 'class_b_display_flag' in m and m[
+                    'class_b_display_flag'] == 1
 
                 a.class_b.dsc_equipped = 'class_b_dsc_flag' in m and m['class_b_dsc_flag'] == 1
 
                 a.class_b.whole_band = 'class_b_band_flag' in m and m['class_b_band_flag'] == 1
 
-                a.class_b.message_22_frequency_management = 'class_b_message_22_flag' in m and m['class_b_message_22_flag'] == 1
+                a.class_b.message_22_frequency_management = 'class_b_message_22_flag' in m and m[
+                    'class_b_message_22_flag'] == 1
 
                 if 'part_number' in m:
                     a.class_b.part_number = m['part_number']
-                
+
                 if 'vendor_id' in m:
                     vid = m['vendor_id']
                     if 'manufacturers_id' in vid:
@@ -303,23 +361,24 @@ class AISParser(rclpy.node.Node):
 
                 for n in ('1', '2', '3', '4'):
 
-                    if 'offset_number_'+n in m:
+                    if 'offset_number_' + n in m:
                         dlrb = DataLinkReservationBlock()
-                        dlrb.offset_number = m['offset_number_'+n]
+                        dlrb.offset_number = m['offset_number_' + n]
 
-                        if 'number_of_slots_'+n in m:
-                            dlrb.number_of_slots = m['number_of_slots_'+n]
-                        if 'timeout_'+n in m:
-                            dlrb.timeout = rclpy.duration.Duration(seconds=60*m['timeout_'+n]).to_msg()
-                        if 'increment_'+n in m:
-                            dlrb.increment = m['increment_'+n]
+                        if 'number_of_slots_' + n in m:
+                            dlrb.number_of_slots = m['number_of_slots_' + n]
+                        if 'timeout_' + n in m:
+                            dlrb.timeout = rclpy.duration.Duration(
+                                seconds=60 * m['timeout_' + n]).to_msg()
+                        if 'increment_' + n in m:
+                            dlrb.increment = m['increment_' + n]
                         a.data_link_reservation_blocks.append(dlrb)
 
                 # Aids to Navigation
 
                 if 'type_of_aids_to_navigation' in m:
                     a.aton.type = m['type_of_aids_to_navigation']
-                
+
                 if 'name_of_aids_navigation' in m:
                     a.static_info.name = m['name_of_aids_navigation']
 
@@ -337,19 +396,19 @@ class AISParser(rclpy.node.Node):
 
                 # Communication
 
-                if m['message_id'] in (1,2,4,11):
+                if m['message_id'] in (1, 2, 4, 11):
                     a.communication.state = Communication.COMMUNICATION_STATE_SOTDMA
                 elif m['message_id'] == 3:
                     a.communication.state = Communication.COMMUNICATION_STATE_ITDMA
                 elif 'communication_state_selector_flag' in m:
                     a.communication.state = m['communication_state_selector_flag']
-                
+
                 if 'sotdma_sync_state' in m:
                     a.communication.sync_state = m['sotdma_sync_state']
 
                 if 'sotdma_slot_timeout' in m:
                     a.communication.sotdma_slot_timeout = m['sotdma_slot_timeout']
-                
+
                 if 'sotdma_received_stations' in m:
                     a.communication.sotdma_received_stations = m['sotdma_received_stations']
 
@@ -381,11 +440,14 @@ class AISParser(rclpy.node.Node):
 
                 if 'utc_time' in m and m['utc_time'] is not None:
                     try:
-                        a.utc_time = rclpy.time.Time(seconds=m['utc_time'].timestamp()).to_msg()
+                        a.utc_time = rclpy.time.Time(
+                            seconds=m['utc_time'].timestamp()).to_msg()
                     except TypeError:
-                        self.get_logger().error('utc_time: '+ str(m['utc_time']))
+                        self.get_logger().error(
+                            'utc_time: ' + str(m['utc_time']))
 
-                a.long_range_transmission_control = 'long_range_transmission_control' in m and m['long_range_transmission_control'] == 1
+                a.long_range_transmission_control = 'long_range_transmission_control' in m and m[
+                    'long_range_transmission_control'] == 1
 
                 if 'safety_related_text' in m:
                     a.safety_related_text = m['safety_related_text']
@@ -400,8 +462,6 @@ class AISParser(rclpy.node.Node):
                     self.ais_pub.publish(a)
                 except Exception as e:
                     self.get_logger().error(str(e))
-
-
 
 
 def main(args=None):
