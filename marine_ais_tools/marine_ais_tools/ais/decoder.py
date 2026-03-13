@@ -261,7 +261,7 @@ def processUTCTime(message):
     try:
         message['utc_time'] = datetime.datetime(
             year, month, day, hour, minute, second, tzinfo=datetime.timezone.utc)
-    except BaseException:
+    except (ValueError, OverflowError):
         message['utc_time'] = None
 
 
@@ -693,16 +693,16 @@ class AISDecoder:
         if len(parts) >= 7:
             try:
                 fragment_count = int(parts[1])
-            except BaseException:
+            except (ValueError, IndexError):
                 return
             try:
                 fragment_number = int(parts[2])
-            except BaseException:
+            except (ValueError, IndexError):
                 return
             channel = parts[4]
             payload = parts[5]
             if fragment_count == 1:
-                # complete message in single nmea sentance
+                # complete message in single nmea sentence
                 self.addMessage(decodePayload(payload, channel, (nmea,)))
             else:
                 if channel not in self.pendingMessages or self.pendingMessages[channel] is None:

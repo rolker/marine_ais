@@ -73,54 +73,59 @@ class NMEAReplay(rclpy.node.Node):
         wallclock_start = datetime.datetime.utcnow()
         next_clock_time = wallclock_start
 
-        for line in open(self.input_filename).readlines():
-            timestring, nmea = line.split(',', 1)
-            datatime = datetime.datetime.fromisoformat(timestring)
-            if data_start_time is None:
-                data_start_time = datatime
+        with open(self.input_filename) as f:
+            for line in f:
+                timestring, nmea = line.split(',', 1)
+                datatime = datetime.datetime.fromisoformat(timestring)
+                if data_start_time is None:
+                    data_start_time = datatime
 
-            while nmea is not None:
-                now = datetime.datetime.utcnow()
-                rosnow = data_start_time + \
-                    datetime.timedelta(
-                        seconds=(
-                            now -
-                            wallclock_start).total_seconds() *
-                        self.rate)
-
-                if self.publish_clock and next_clock_time <= now:
-                    rosclock_time = data_start_time + \
+                while nmea is not None:
+                    now = datetime.datetime.utcnow()
+                    rosnow = data_start_time + \
                         datetime.timedelta(
                             seconds=(
-                                next_clock_time -
+                                now -
                                 wallclock_start).total_seconds() *
                             self.rate)
-                    seconds = int(rosclock_time.timestamp())
-                    nanoseconds = rclpy.constants.S_TO_NS * \
-                        (rosclock_time.timestamp() - seconds)
-                    c = Clock()
-                    c.clock = rclpy.time.Time(
-                        seconds=seconds, nanoseconds=nanoseconds).to_msg()
-                    self.clock_publisher.publish(c)
-                    next_clock_time += clock_period
 
-                if datatime <= rosnow:
-                    sentence = Sentence()
-                    sentence.header.frame_id = self.frame_id
-                    seconds = int(datatime.timestamp())
-                    nanoseconds = rclpy.constants.S_TO_NS * \
-                        (datatime.timestamp() - seconds)
-                    sentence.header.stamp = rclpy.time.Time(
-                        seconds=seconds, nanoseconds=nanoseconds).to_msg()
-                    sentence.sentence = nmea
-                    self.nmea_pub.publish(sentence)
-                    nmea = None
-                    break
-                sleeptime = (datatime - rosnow).total_seconds() / self.rate
-                if self.publish_clock:
-                    clocksleeptime = (next_clock_time - now).total_seconds()
-                    sleeptime = min(clocksleeptime, sleeptime)
-                time.sleep(sleeptime)
+                    if self.publish_clock and next_clock_time <= now:
+                        rosclock_time = data_start_time + \
+                            datetime.timedelta(
+                                seconds=(
+                                    next_clock_time -
+                                    wallclock_start).total_seconds() *
+                                self.rate)
+                        seconds = int(rosclock_time.timestamp())
+                        nanoseconds = rclpy.constants.S_TO_NS * \
+                            (rosclock_time.timestamp() - seconds)
+                        c = Clock()
+                        c.clock = rclpy.time.Time(
+                            seconds=seconds,
+                            nanoseconds=nanoseconds).to_msg()
+                        self.clock_publisher.publish(c)
+                        next_clock_time += clock_period
+
+                    if datatime <= rosnow:
+                        sentence = Sentence()
+                        sentence.header.frame_id = self.frame_id
+                        seconds = int(datatime.timestamp())
+                        nanoseconds = rclpy.constants.S_TO_NS * \
+                            (datatime.timestamp() - seconds)
+                        sentence.header.stamp = rclpy.time.Time(
+                            seconds=seconds,
+                            nanoseconds=nanoseconds).to_msg()
+                        sentence.sentence = nmea
+                        self.nmea_pub.publish(sentence)
+                        nmea = None
+                        break
+                    sleeptime = \
+                        (datatime - rosnow).total_seconds() / self.rate
+                    if self.publish_clock:
+                        clocksleeptime = \
+                            (next_clock_time - now).total_seconds()
+                        sleeptime = min(clocksleeptime, sleeptime)
+                    time.sleep(sleeptime)
 
 
 def main(args=None):
