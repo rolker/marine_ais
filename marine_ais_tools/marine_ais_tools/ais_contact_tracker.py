@@ -15,23 +15,23 @@ def calculatePolygon(static: Static):
     # REP 103: In relation to a body the standard is:
     # x forward, y left, z up
     bow = Point32()
-    bow.x = static.reference_to_bow_distance
+    bow.x = float(static.reference_to_bow_distance)
     width = static.reference_to_port_distance + static.reference_to_starboard_distance
     half_width = width/2.0
     bow.y = half_width-static.reference_to_port_distance
-    length = static.reference_to_bow_distance + static.reference_to_stern_distance
+    length = float(static.reference_to_bow_distance + static.reference_to_stern_distance)
     port_pointy_start = Point32()
     port_pointy_start.x = bow.x-(length*0.1)
-    port_pointy_start.y = static.reference_to_port_distance
+    port_pointy_start.y =float(static.reference_to_port_distance)
     starboard_pointy_start = Point32()
     starboard_pointy_start.x = port_pointy_start.x
-    starboard_pointy_start.y = -static.reference_to_starboard_distance
+    starboard_pointy_start.y = float(-static.reference_to_starboard_distance)
     aft_port = Point32()
-    aft_port.x = -static.reference_to_stern_distance
-    aft_port.y = static.reference_to_port_distance
+    aft_port.x = float(-static.reference_to_stern_distance)
+    aft_port.y = float(static.reference_to_port_distance)
     aft_starboard = Point32()
     aft_starboard.x = aft_port.x
-    aft_starboard.y = -static.reference_to_starboard_distance
+    aft_starboard.y = float(-static.reference_to_starboard_distance)
 
     footprint = Polygon()
     footprint.points.append(bow)
@@ -60,6 +60,7 @@ class AisContactTracker(rclpy.node.Node):
 
 
     def aisCallback(self, msg: AIS):
+        self.get_logger().debug("msg: " + str(msg))
         if msg.message_id in (1,2,3,5,9,18,19,24):
             if not msg.id in self.contacts:
                 self.contacts[msg.id] = AISContact()
@@ -87,6 +88,7 @@ class AisContactTracker(rclpy.node.Node):
                 self.contacts[msg.id].twist.twist = msg.navigation.twist
                 self.contacts[msg.id].navigational_status = msg.navigation.navigational_status
                 # todo, figure out covariances
+                self.get_logger().debug("publishing contact: "+ str(self.contacts[msg.id]))
 
                 self.contacts_pub.publish(self.contacts[msg.id])
         if msg.message_id == 21:
