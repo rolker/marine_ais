@@ -73,6 +73,9 @@ def markUnknown(a: AIS) -> None:
     # Orientation. A null quaternion, not the identity: consumers test
     # length2() to decide whether a heading is real (CAMP does this in
     # camp/ais/ais_contact.cpp), and the identity passes that test.
+    # heading_valid carries the same fact out-of-band for consumers that read
+    # the flag instead (ais_layer, via ais_contact_tracker.hasUsableHeading).
+    a.navigation.heading_valid = False
     a.navigation.pose.orientation.x = 0.0
     a.navigation.pose.orientation.y = 0.0
     a.navigation.pose.orientation.z = 0.0
@@ -153,21 +156,29 @@ class AISParser(rclpy.node.Node):
                     a.navigation.pose.orientation.y = q[2]
                     a.navigation.pose.orientation.z = q[3]
                     a.navigation.pose.orientation.w = q[0]
+                    a.navigation.heading_valid = True
                 else:
-                    # AIS true heading 511 means "not available", which the
-                    # decoder turns into None. Leaving the field alone is not
-                    # neutral: geometry_msgs/Quaternion defaults to the
-                    # *identity* (0, 0, 0, 1), a perfectly valid orientation
-                    # meaning yaw 0 -- due east in ENU. Consumers cannot tell
-                    # that apart from a vessel genuinely heading east.
+                    # Both signals, deliberately. They were added independently
+                    # on 2026-08-20 -- heading_valid on the boat side for
+                    # ais_layer, the null quaternion on the operator side for
+                    # CAMP -- and each consumer reads only its own, so dropping
+                    # either re-breaks that consumer.
                     #
-                    # A null quaternion is the agreed signal for "no heading":
-                    # CAMP tests length2() > 0.1 before believing an
-                    # orientation (camp/ais/ais_contact.cpp:45-58) and falls
-                    # back to course over ground when the contact is moving,
-                    # or to NaN when it is not, which draws a circle rather
-                    # than a direction. Same convention as the NaN used above
-                    # for unknown position and altitude.
+                    # AIS true heading 511 means "not available", which the
+                    # decoder turns into None. Leaving pose.orientation alone
+                    # is not neutral: geometry_msgs/Quaternion defaults to the
+                    # IDENTITY (0, 0, 0, 1), a valid orientation meaning yaw 0
+                    # -- due east in ENU -- so an absent heading is otherwise
+                    # indistinguishable from a vessel genuinely heading east.
+                    #
+                    # heading_valid says so explicitly, for consumers that can
+                    # be updated to check it. The null quaternion says the same
+                    # thing in-band, for the ones already written to test
+                    # length2() before believing an orientation -- CAMP does
+                    # this in camp/ais/ais_contact.cpp and falls back to course
+                    # over ground when the contact is moving, or draws a circle
+                    # when it is not.
+                    a.navigation.heading_valid = False
                     a.navigation.pose.orientation.x = 0.0
                     a.navigation.pose.orientation.y = 0.0
                     a.navigation.pose.orientation.z = 0.0

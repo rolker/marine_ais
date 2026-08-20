@@ -72,6 +72,8 @@ def test_every_sentinel_reports_unknown(ros):
     assert math.isnan(position.longitude)
     assert _quaternion_length2(a.navigation.pose.orientation) < 0.1, \
         'unknown heading must be a null quaternion; the identity reads as due east'
+    assert not a.navigation.heading_valid, \
+        'the out-of-band flag must agree with the in-band null quaternion'
     assert math.isnan(a.navigation.twist.linear.x)
     assert math.isnan(a.navigation.twist.linear.y)
     assert math.isnan(a.navigation.twist.angular.z)
@@ -88,6 +90,7 @@ def test_available_values_are_not_clobbered_by_the_unknown_defaults(ros):
     assert position.latitude == pytest.approx(43.05, abs=1e-4)
     assert position.longitude == pytest.approx(-70.72, abs=1e-4)
     assert _quaternion_length2(a.navigation.pose.orientation) > 0.9
+    assert a.navigation.heading_valid
     assert not math.isnan(a.navigation.twist.linear.x)
     assert not math.isnan(a.navigation.twist.linear.y)
     assert a.navigation.rate_of_turn_status != Navigation.RATE_OF_TURN_UNAVAILABLE

@@ -55,6 +55,7 @@ def _length2(q):
 def test_missing_heading_yields_a_null_orientation(ros):
     messages = _parse(CLASS_B_NO_HEADING)
     assert messages, 'sentence did not decode to an AIS message'
+    assert not messages[0].navigation.heading_valid
     orientation = messages[0].navigation.pose.orientation
     assert _length2(orientation) < 0.1, (
         'unknown heading must be a null quaternion, not the identity that '

@@ -170,3 +170,16 @@ uint8 position_latency
 # 1 = Station operating in assigned mode
 
 bool assigned_mode
+
+# True heading validity.
+#
+# AIS transmits 511 for "heading not available", which the decoder turns into
+# None and the parser then leaves pose.orientation at its default value. That
+# default is the IDENTITY quaternion, not a zeroed one, so an absent heading is
+# otherwise indistinguishable from a vessel heading due east (ENU yaw 0). A
+# consumer that orients a hull, or fuses heading, needs to be able to tell the
+# difference -- hence an explicit flag rather than a sentinel in the quaternion.
+#
+# false = pose.orientation is the default and carries no heading information
+
+bool heading_valid
