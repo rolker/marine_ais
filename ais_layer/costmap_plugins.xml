@@ -1,0 +1,9 @@
+<library path="ais_layer">
+  <class type="ais_layer::AISLayer" base_class_type="nav2_costmap_2d::Layer">
+    <description>
+      An AIS costmap layer: contacts are dead-reckoned forward from their last
+      fix, and the swept region between last-known and predicted position is
+      painted with an uncertainty envelope that grows with time since fix.
+    </description>
+  </class>
+</library>

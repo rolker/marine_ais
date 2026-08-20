@@ -45,6 +45,68 @@ import rclpy.node
 import transforms3d
 
 
+def markUnknown(a: AIS) -> None:
+    """Set every optional field to its "not available" representation.
+
+    AIS reports most fields with a dedicated not-available sentinel, and the
+    decoder turns those into None. Each field is then populated under an
+    ``if ... is not None`` guard, which makes the failure mode of a forgotten
+    ``else`` subtle: the field does not stay empty, it takes the ROS default,
+    and those defaults all look like real measurements. A default-constructed
+    geometry_msgs Pose is position 0N 0E with an identity quaternion -- which
+    is a valid heading of due east -- a default Twist is a speed of zero, and
+    a default builtin_interfaces/Time is 1970-01-01T00:00:00Z.
+
+    Three display bugs came from exactly that: heading-less contacts drawn
+    pointing east, and unknown speed and course rendered as huge numbers.
+
+    Defaulting to unknown up front inverts the failure mode. A field that
+    nothing populates stays unknown, which is true, rather than becoming a
+    value that looks real. Adding a field to this function is cheaper than
+    remembering an ``else`` at every future call site.
+    """
+    # Position. NaN is this module's convention for an unavailable float.
+    a.navigation.pose.position.latitude = math.nan
+    a.navigation.pose.position.longitude = math.nan
+    a.navigation.pose.position.altitude = math.nan
+
+    # Orientation. A null quaternion, not the identity: consumers test
+    # length2() to decide whether a heading is real (CAMP does this in
+    # camp/ais/ais_contact.cpp), and the identity passes that test.
+    # heading_valid carries the same fact out-of-band for consumers that read
+    # the flag instead (ais_layer, via ais_contact_tracker.hasUsableHeading).
+    a.navigation.heading_valid = False
+    a.navigation.pose.orientation.x = 0.0
+    a.navigation.pose.orientation.y = 0.0
+    a.navigation.pose.orientation.z = 0.0
+    a.navigation.pose.orientation.w = 0.0
+
+    # Velocity, carrying SOG/COG. Only x and y: linear.z stays 0.0 because
+    # consumers take the length of the whole vector, and a NaN z would make
+    # every speed unknown, including the ones we do know.
+    a.navigation.twist.linear.x = math.nan
+    a.navigation.twist.linear.y = math.nan
+    # Rate of turn.
+    a.navigation.twist.angular.z = math.nan
+    a.navigation.rate_of_turn_status = Navigation.RATE_OF_TURN_UNAVAILABLE
+
+    # Enumerations that define their own not-available value.
+    a.navigation.time_stamp = Navigation.TIME_STAMP_NOT_AVAIABLE
+    a.navigation.navigational_status.status = (
+        NavigationalStatus.NAVIGATIONAL_STATUS_UNDEFINED)
+    a.navigation.navigational_status.special_manoeuvre = (
+        NavigationalStatus.SPECIAL_MANOEUVRE_NOT_AVAILABLE)
+
+    # Voyage/static. AIS encodes an unavailable draught as 0, which a ROS
+    # consumer cannot tell from a real 0.0 m draught.
+    a.static_info.static_draught = math.nan
+
+    # NOTE: utc_time has no unknown representation -- builtin_interfaces/Time
+    # has no NaN, and its default (0) is a valid instant, 1970-01-01T00:00:00Z.
+    # Nothing in this workspace reads it today. If something starts to, it
+    # needs an explicit validity flag in AIS.msg rather than a sentinel.
+
+
 class AISParser(rclpy.node.Node):
 
     def __init__(self) -> None:
@@ -67,6 +129,7 @@ class AISParser(rclpy.node.Node):
                 datetime.timezone.utc)
             for m in msgs:
                 a = AIS()
+                markUnknown(a)
                 a.header = msg.header
                 a.message_id = m['message_id']
                 a.repeat_indicator = m['repeat_indicator']
@@ -93,6 +156,33 @@ class AISParser(rclpy.node.Node):
                     a.navigation.pose.orientation.y = q[2]
                     a.navigation.pose.orientation.z = q[3]
                     a.navigation.pose.orientation.w = q[0]
+                    a.navigation.heading_valid = True
+                else:
+                    # Both signals, deliberately. They were added independently
+                    # on 2026-08-20 -- heading_valid on the boat side for
+                    # ais_layer, the null quaternion on the operator side for
+                    # CAMP -- and each consumer reads only its own, so dropping
+                    # either re-breaks that consumer.
+                    #
+                    # AIS true heading 511 means "not available", which the
+                    # decoder turns into None. Leaving pose.orientation alone
+                    # is not neutral: geometry_msgs/Quaternion defaults to the
+                    # IDENTITY (0, 0, 0, 1), a valid orientation meaning yaw 0
+                    # -- due east in ENU -- so an absent heading is otherwise
+                    # indistinguishable from a vessel genuinely heading east.
+                    #
+                    # heading_valid says so explicitly, for consumers that can
+                    # be updated to check it. The null quaternion says the same
+                    # thing in-band, for the ones already written to test
+                    # length2() before believing an orientation -- CAMP does
+                    # this in camp/ais/ais_contact.cpp and falls back to course
+                    # over ground when the contact is moving, or draws a circle
+                    # when it is not.
+                    a.navigation.heading_valid = False
+                    a.navigation.pose.orientation.x = 0.0
+                    a.navigation.pose.orientation.y = 0.0
+                    a.navigation.pose.orientation.z = 0.0
+                    a.navigation.pose.orientation.w = 0.0
 
                 if 'rate_of_turn' in m:
                     if m['rate_of_turn'] is None:

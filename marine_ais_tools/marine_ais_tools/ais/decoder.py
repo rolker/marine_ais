@@ -203,6 +203,20 @@ def processHeading(message):
 
 
 def processTimeStamp(message):
+    # DISABLED, deliberately -- do not "clean up" the early return.
+    #
+    # The body below maps time stamps 60-63 to None. ais_parser guards this
+    # field with `if 'time_stamp' in m:` (key presence, not None-ness), so a
+    # None would be assigned straight into a uint8 field and raise. Values
+    # 60-63 are common, so re-enabling this crashes the parser on ordinary
+    # traffic.
+    #
+    # Passing the raw value through is also more informative than the body
+    # would be: Navigation.msg defines a distinct constant for each of
+    # TIME_STAMP_NOT_AVAIABLE (60), MANUAL_INPUT (61), DEAD_RECKONING (62)
+    # and INOPERATIVE (63), and mapping them all to None would collapse that
+    # distinction. Re-enabling would need a None-aware guard in the parser
+    # and a way to carry the note fields.
     return
     ts = message['time_stamp']
     if ts == 60:
