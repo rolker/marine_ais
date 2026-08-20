@@ -113,6 +113,26 @@ def calculatePolygon(static: Static):
     return footprint
 
 
+def updateFootprint(contact: AISContact):
+    """Rebuild contact.footprint from its static dimensions, if it has any.
+
+    ITU-R M.1371 defines A = B = C = D = 0 as "dimensions not available"; a
+    polygon built from that would be a degenerate outline with every vertex
+    at the reference point -- downstream, a radius-0 hull painting nothing.
+    So the footprint is only (re)built when the report actually carries a
+    length and a beam; otherwise whatever footprint the contact already has
+    (possibly none) is left alone, and consumers fall back to their default
+    radius.
+    """
+    static_info = contact.static_info
+    length = (static_info.reference_to_bow_distance +
+              static_info.reference_to_stern_distance)
+    width = (static_info.reference_to_port_distance +
+             static_info.reference_to_starboard_distance)
+    if length > 0 and width > 0:
+        contact.footprint = calculatePolygon(static_info)
+
+
 class AisContactTracker(rclpy.node.Node):
 
     def __init__(self):
@@ -220,11 +240,17 @@ class AisContactTracker(rclpy.node.Node):
                     self.contacts[msg.id].static_info = copy.deepcopy(
                         msg.static_info)
                     self.contacts[msg.id].voyage = copy.deepcopy(msg.voyage)
+                    # Class A dimensions arrive here and ONLY here. Without
+                    # this a 200 m tanker keeps an empty footprint and paints
+                    # as a consumer's default-radius circle.
+                    updateFootprint(self.contacts[msg.id])
                 else:
                     if msg.class_b.part_number == 0:  # 24A
                         self.contacts[msg.id].static_info.name = msg.static_info.name
-                        self.contacts[msg.id].footprint = calculatePolygon(
-                            self.contacts[msg.id].static_info)
+                        # 24A carries only the name; the dimensions are in
+                        # 24B. The guard inside keeps a not-yet-dimensioned
+                        # contact from getting a degenerate all-zero polygon.
+                        updateFootprint(self.contacts[msg.id])
                     else:  # 24B
                         self.contacts[msg.id].static_info.callsign = msg.static_info.callsign
                         self.contacts[msg.id].static_info \
@@ -243,8 +269,7 @@ class AisContactTracker(rclpy.node.Node):
                             .reference_to_starboard_distance = \
                             msg.static_info \
                             .reference_to_starboard_distance
-                        self.contacts[msg.id].footprint = calculatePolygon(
-                            self.contacts[msg.id].static_info)
+                        updateFootprint(self.contacts[msg.id])
             if msg.message_id in (1, 2, 3, 9, 18, 19):
                 self.contacts[msg.id].header = msg.header
                 self.contacts[msg.id].position_message_id = msg.message_id
