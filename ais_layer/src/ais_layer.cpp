@@ -340,6 +340,46 @@ void AISLayer::onInitialize()
         << unknown_speed_ << "); using 5.0 m/s.");
     unknown_speed_ = 5.0;
   }
+  // The dynamic-parameter path validates all of these; the init path must
+  // match, or a bad value in a launch file sails straight through. A NaN
+  // max_age is the worst of them: every age comparison is false, so contacts
+  // NEVER expire and dead vessels accumulate on the costmap forever.
+  if (!(std::isfinite(max_age_class_a_) && max_age_class_a_ > 0.0)) {
+    RCLCPP_WARN_STREAM(
+      logger_, "AISLayer: max_age_class_a must be finite and positive (got "
+        << max_age_class_a_ << "); using 90.0 s.");
+    max_age_class_a_ = 90.0;
+  }
+  if (!(std::isfinite(max_age_class_b_) && max_age_class_b_ > 0.0)) {
+    RCLCPP_WARN_STREAM(
+      logger_, "AISLayer: max_age_class_b must be finite and positive (got "
+        << max_age_class_b_ << "); using 180.0 s.");
+    max_age_class_b_ = 180.0;
+  }
+  if (!(std::isfinite(max_age_default_) && max_age_default_ > 0.0)) {
+    RCLCPP_WARN_STREAM(
+      logger_, "AISLayer: max_age_default must be finite and positive (got "
+        << max_age_default_ << "); using 120.0 s.");
+    max_age_default_ = 120.0;
+  }
+  if (!(std::isfinite(default_position_sigma_) && default_position_sigma_ > 0.0)) {
+    RCLCPP_WARN_STREAM(
+      logger_, "AISLayer: default_position_sigma must be finite and positive (got "
+        << default_position_sigma_ << "); using 25.0 m.");
+    default_position_sigma_ = 25.0;
+  }
+  if (!(std::isfinite(default_speed_sigma_) && default_speed_sigma_ > 0.0)) {
+    RCLCPP_WARN_STREAM(
+      logger_, "AISLayer: default_speed_sigma must be finite and positive (got "
+        << default_speed_sigma_ << "); using 0.5 m/s.");
+    default_speed_sigma_ = 0.5;
+  }
+  if (!(std::isfinite(unknown_variance_threshold_) && unknown_variance_threshold_ > 0.0)) {
+    RCLCPP_WARN_STREAM(
+      logger_, "AISLayer: unknown_variance_threshold must be finite and positive (got "
+        << unknown_variance_threshold_ << "); using 1.0e5.");
+    unknown_variance_threshold_ = 1.0e5;
+  }
   if (max_samples_ < 1) {
     RCLCPP_WARN_STREAM(
       logger_, "AISLayer: max_samples must be at least 1 (got "
