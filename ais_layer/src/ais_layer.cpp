@@ -798,7 +798,14 @@ void AISLayer::updateBounds(
   if (!expired.empty()) {
     std::lock_guard<std::mutex> lock(tracks_mutex_);
     for (const uint32_t id : expired) {
-      tracks_.erase(id);
+      // The age was evaluated on a snapshot. A fresh report can have arrived
+      // for this MMSI between the snapshot and now; erasing unconditionally
+      // would delete a live contact until its next report. Erase only if the
+      // stored report is still the one whose age expired.
+      const auto it = tracks_.find(id);
+      if (it != tracks_.end() && it->second.header.stamp == tracks[id].header.stamp) {
+        tracks_.erase(it);
+      }
     }
   }
 
