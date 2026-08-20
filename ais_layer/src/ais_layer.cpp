@@ -627,6 +627,15 @@ void AISLayer::updateBounds(
   double robot_x, double robot_y, double /*robot_yaw*/,
   double * min_x, double * min_y, double * max_x, double * max_y)
 {
+  // Serialise against dynamicParametersCallback, which runs on the node's
+  // executor thread and writes every tunable this function reads. Nav2 locks
+  // only the *combined* costmap's mutex around the update cycle, never each
+  // layer's own, so a layer that wants its parameters stable across one
+  // updateBounds pass must take its own mutex here -- exactly as nav2's
+  // bundled layers do (e.g. obstacle_layer). mutex_t is a recursive mutex,
+  // so the Costmap2D methods called below that also lock it are safe.
+  std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
+
   if (!enabled_) {
     // Disabling must actually erase. Clear whatever is still painted and keep
     // requesting its extent one last time so the master drops it too --
@@ -792,8 +801,10 @@ rcl_interfaces::msg::SetParametersResult AISLayer::dynamicParametersCallback(
   rcl_interfaces::msg::SetParametersResult result;
   result.successful = true;
 
-  // Serialise against updateBounds/updateCosts, which run on the costmap
-  // thread and read every one of these.
+  // Serialise against updateBounds, which takes the same mutex for the whole
+  // painting pass and reads every one of these. (Nav2 itself locks only the
+  // combined costmap's mutex, so without both sides locking here a live
+  // `ros2 param set` could change a tunable mid-paint.)
   std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
 
   for (const auto & parameter : parameters) {
