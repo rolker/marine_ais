@@ -1,3 +1,31 @@
+# Copyright 2026 University of New Hampshire
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are met:
+#
+#    * Redistributions of source code must retain the above copyright
+#      notice, this list of conditions and the following disclaimer.
+#
+#    * Redistributions in binary form must reproduce the above copyright
+#      notice, this list of conditions and the following disclaimer in the
+#      documentation and/or other materials provided with the distribution.
+#
+#    * Neither the name of the University of New Hampshire nor the names of its
+#      contributors may be used to endorse or promote products derived from
+#      this software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+# AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE
+# LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+# SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+# INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+# ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
 """Every AIS "not available" sentinel must survive as unknown, not as a value.
 
 AIS encodes most fields with a dedicated not-available sentinel. The decoder
@@ -99,9 +127,12 @@ def test_available_values_are_not_clobbered_by_the_unknown_defaults(ros):
 
 
 def test_fields_a_message_type_never_carries_stay_unknown(ros):
-    """A message with no position must not report one. This is the shape a
-    forgotten guard takes: nothing writes the field, so it keeps the ROS
-    default -- which for a Pose is 0N 0E, off the coast of Africa."""
+    """A message with no position must not report one.
+
+    This is the shape a forgotten guard takes: nothing writes the field, so
+    it keeps the ROS default -- which for a Pose is 0N 0E, off the coast of
+    Africa.
+    """
     a = _parse(MSG5_STATIC_ONLY)
     assert math.isnan(a.navigation.pose.position.latitude)
     assert math.isnan(a.navigation.pose.position.longitude)
@@ -109,17 +140,23 @@ def test_fields_a_message_type_never_carries_stay_unknown(ros):
 
 
 def test_unavailable_draught_is_not_reported_as_zero_metres(ros):
-    """AIS encodes an unavailable draught as 0, which a consumer cannot tell
+    """An unavailable draught must not read as a real 0.0 m draught.
+
+    AIS encodes an unavailable draught as 0, which a consumer cannot tell
     from a real 0.0 m draught once it is in a float field. This one has no
-    ``else`` on its guard, so it relies entirely on the unknown defaults."""
+    ``else`` on its guard, so it relies entirely on the unknown defaults.
+    """
     a = _parse(MSG5_STATIC_ONLY)
     assert math.isnan(a.static_info.static_draught)
 
 
 def test_vertical_velocity_stays_zero_not_unknown():
-    """linear.z must NOT default to NaN. Consumers take the length of the whole
-    linear vector to get speed over ground, so a NaN z would make every speed
-    unknown -- including the speeds that were reported."""
+    """linear.z must NOT default to NaN.
+
+    Consumers take the length of the whole linear vector to get speed over
+    ground, so a NaN z would make every speed unknown -- including the
+    speeds that were reported.
+    """
     a = AIS()
     markUnknown(a)
     assert a.navigation.twist.linear.z == 0.0
