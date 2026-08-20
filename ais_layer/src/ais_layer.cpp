@@ -907,8 +907,19 @@ rcl_interfaces::msg::SetParametersResult AISLayer::dynamicParametersCallback(
       const int64_t value = parameter.as_int();
       if (key == "max_samples" && value >= 1) {
         max_samples_ = static_cast<int>(value);
-      } else if (key == "contact_cost" && value >= 1 && value < NO_INFORMATION) {
-        contact_cost_ = static_cast<unsigned char>(value);
+      } else if (key == "contact_cost") {
+        // Lowering contact_cost below envelope_edge_cost would invert the
+        // taper: cost RISING away from the hull, teaching the planner to
+        // hug vessels. The init path keeps the same invariant by clamping
+        // envelope_edge_cost to at most contact_cost.
+        if (value >= 1 && value < NO_INFORMATION &&
+          value >= static_cast<int64_t>(envelope_edge_cost_))
+        {
+          contact_cost_ = static_cast<unsigned char>(value);
+        } else {
+          result.successful = false;
+          result.reason = full + " rejected: out of range";
+        }
       } else if (key == "envelope_edge_cost" && value >= 1 && value <= contact_cost_) {
         envelope_edge_cost_ = static_cast<unsigned char>(value);
       } else {
