@@ -209,7 +209,10 @@ protected:
   unsigned char contact_cost_{nav2_costmap_2d::LETHAL_OBSTACLE};
   unsigned char envelope_edge_cost_{1};
   /// Variance at or above which a covariance entry is treated as "unknown".
-  /// Matches the tracker's `unknown_variance` parameter.
+  /// Deliberately a decade BELOW the tracker's `unknown_variance` stand-in
+  /// (1e5 here vs the tracker's 1e6), not equal to it: the sentinel must
+  /// still read as unknown if the two configs drift or the value arrives
+  /// scaled, and no real AIS variance comes anywhere near 1e5.
   double unknown_variance_threshold_{1.0e5};
 };
 
