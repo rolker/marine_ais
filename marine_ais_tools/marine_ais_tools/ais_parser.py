@@ -93,6 +93,12 @@ class AISParser(rclpy.node.Node):
                     a.navigation.pose.orientation.y = q[2]
                     a.navigation.pose.orientation.z = q[3]
                     a.navigation.pose.orientation.w = q[0]
+                    a.navigation.heading_valid = True
+                else:
+                    # Leave the orientation at its default, which is the
+                    # IDENTITY quaternion -- indistinguishable from a real
+                    # heading of due east unless we say so explicitly.
+                    a.navigation.heading_valid = False
 
                 if 'rate_of_turn' in m:
                     if m['rate_of_turn'] is None:
