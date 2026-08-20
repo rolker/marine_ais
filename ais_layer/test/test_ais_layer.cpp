@@ -520,6 +520,21 @@ TEST(HullGeometry, NoDimensionsFallsBackToTheGivenRadius)
   EXPECT_NEAR(7.0, hull.radius, 1e-9);
 }
 
+TEST(HullGeometry, DegeneratePolygonFallsBackToTheGivenRadius)
+{
+  // A Class B whose static report carried all-zero A/B/C/D dimensions ("not
+  // available") yields a footprint whose vertices all sit at the reference
+  // point. Enough vertices to pass the size check and a heading to pass the
+  // oriented check -- but rasterising it would paint a radius-0 lethal hull,
+  // i.e. an invisible moving vessel. It must fall back to the circle.
+  const std::vector<Point2D> degenerate(5, Point2D{0.0, 0.0});
+  const Hull hull = makeHull({3.0, 4.0}, 1.0, true, degenerate, 7.0);
+  EXPECT_TRUE(hull.is_circle);
+  EXPECT_NEAR(7.0, hull.radius, 1e-9);
+  EXPECT_NEAR(3.0, hull.centre.x, 1e-9);
+  EXPECT_NEAR(4.0, hull.centre.y, 1e-9);
+}
+
 TEST(HullGeometry, OrientedHullCarriesUsableBoundingCircles)
 {
   const std::vector<Point2D> body = {{5.0, 3.0}, {-5.0, 3.0}, {-5.0, -3.0}, {5.0, -3.0}};

@@ -128,28 +128,37 @@ Hull makeHull(
   Hull hull;
   hull.centre = centre;
 
-  // Without a heading an oriented outline would be a fabrication, and without
-  // dimensions there is no outline at all. Either way fall back to a circle --
-  // which is also the cheap case to rasterise, since its distance is analytic.
-  if (body.size() < 3 || !oriented) {
-    double radius = 0.0;
-    for (const auto & p : body) {
-      radius = std::max(radius, std::hypot(p.x, p.y));
-    }
+  double body_radius = 0.0;
+  for (const auto & p : body) {
+    body_radius = std::max(body_radius, std::hypot(p.x, p.y));
+  }
+
+  // A polygon this small is a point, not an outline. The concrete case: a
+  // Class B static report with all-zero A/B/C/D dimensions ("not available"
+  // per ITU-R M.1371) yields a footprint whose vertices all sit at the
+  // reference point, and rasterising that would paint a radius-0 lethal hull
+  // -- an invisible vessel.
+  constexpr double kDegenerateRadius = 1.0e-6;
+
+  // Without a heading an oriented outline would be a fabrication, without
+  // dimensions there is no outline at all, and a degenerate outline paints
+  // nothing. In every such case fall back to a circle -- which is also the
+  // cheap case to rasterise, since its distance is analytic.
+  if (body.size() < 3 || !oriented || body_radius <= kDegenerateRadius) {
     hull.is_circle = true;
-    hull.radius = (radius > 0.0) ? radius : fallback_radius;
+    hull.radius = (body_radius > kDegenerateRadius) ? body_radius : fallback_radius;
     hull.inscribed = hull.radius;
     return hull;
   }
 
   const double cos_yaw = std::cos(yaw);
   const double sin_yaw = std::sin(yaw);
+  hull.radius = body_radius;
   hull.vertices.reserve(body.size());
   for (const auto & p : body) {
     hull.vertices.push_back(
       {centre.x + p.x * cos_yaw - p.y * sin_yaw,
         centre.y + p.x * sin_yaw + p.y * cos_yaw});
-    hull.radius = std::max(hull.radius, std::hypot(p.x, p.y));
   }
 
   // Largest circle about the centre that is still wholly inside the outline.
