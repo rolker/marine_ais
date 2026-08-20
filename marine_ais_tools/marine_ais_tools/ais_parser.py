@@ -93,6 +93,25 @@ class AISParser(rclpy.node.Node):
                     a.navigation.pose.orientation.y = q[2]
                     a.navigation.pose.orientation.z = q[3]
                     a.navigation.pose.orientation.w = q[0]
+                else:
+                    # AIS true heading 511 means "not available", which the
+                    # decoder turns into None. Leaving the field alone is not
+                    # neutral: geometry_msgs/Quaternion defaults to the
+                    # *identity* (0, 0, 0, 1), a perfectly valid orientation
+                    # meaning yaw 0 -- due east in ENU. Consumers cannot tell
+                    # that apart from a vessel genuinely heading east.
+                    #
+                    # A null quaternion is the agreed signal for "no heading":
+                    # CAMP tests length2() > 0.1 before believing an
+                    # orientation (camp/ais/ais_contact.cpp:45-58) and falls
+                    # back to course over ground when the contact is moving,
+                    # or to NaN when it is not, which draws a circle rather
+                    # than a direction. Same convention as the NaN used above
+                    # for unknown position and altitude.
+                    a.navigation.pose.orientation.x = 0.0
+                    a.navigation.pose.orientation.y = 0.0
+                    a.navigation.pose.orientation.z = 0.0
+                    a.navigation.pose.orientation.w = 0.0
 
                 if 'rate_of_turn' in m:
                     if m['rate_of_turn'] is None:
