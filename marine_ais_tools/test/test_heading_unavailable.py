@@ -11,9 +11,6 @@ believing an orientation (camp/ais/ais_contact.cpp:45-58).
 """
 
 import rclpy
-import rclpy.node
-
-from marine_ais_msgs.msg import AIS
 
 from marine_ais_tools.ais_parser import AISParser
 
