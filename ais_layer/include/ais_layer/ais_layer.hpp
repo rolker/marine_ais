@@ -6,6 +6,7 @@
 
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -91,6 +92,12 @@ struct SweptPose
 /// ages out and the layer simply stops contributing -- it never strands the
 /// planner.
 ///
+/// **Own-ship exclusion.** With a shore-side receiver the feed includes the
+/// robot's own transponder. List the vessel's MMSI (and any escort/companion
+/// craft that must not be avoided) in the `ignore_mmsis` parameter; matching
+/// contacts are dropped on receipt. Without this, the layer paints a stale
+/// dead-reckoned hull on top of the robot itself and freezes the planner.
+///
 /// Aids to navigation (message type 21) are deliberately out of scope: the
 /// tracker publishes those on a separate `atons` topic as bare points, and
 /// where they are charted `s57_layer` already accounts for them.
@@ -166,6 +173,11 @@ protected:
   /// Latest contact per MMSI. AIS repeats a contact on every position report,
   /// so keying by id keeps exactly one live track per vessel.
   std::map<uint32_t, marine_ais_msgs::msg::AISContact> tracks_;
+  /// MMSIs to drop on receipt (`ignore_mmsis` parameter), own ship first
+  /// among them: a shore-side receiver hears the boat's own transponder, and
+  /// painting a stale dead-reckoned hull on top of the robot freezes the
+  /// planner. Guarded by tracks_mutex_ alongside tracks_.
+  std::set<uint32_t> ignore_mmsis_;
   std::mutex tracks_mutex_;
 
   std::string global_frame_id_;

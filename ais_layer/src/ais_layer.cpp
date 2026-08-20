@@ -7,6 +7,7 @@
 #include <cmath>
 #include <limits>
 #include <memory>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -57,6 +58,24 @@ bool isValidQuaternion(const geometry_msgs::msg::Quaternion & q)
 {
   const double norm = std::sqrt(q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w);
   return std::isfinite(norm) && std::abs(norm - 1.0) < 1.0e-3;
+}
+
+/// Parse an `ignore_mmsis` value into a set of MMSIs, or report the first
+/// entry that cannot be one. AIS ids are unsigned 32-bit; the parameter
+/// arrives as int64s, so out-of-range entries are representable and must be
+/// caught rather than silently truncated into ignoring the wrong vessel.
+bool parseIgnoreMmsis(
+  const std::vector<int64_t> & values, std::set<uint32_t> & out, int64_t & bad_value)
+{
+  out.clear();
+  for (const int64_t value : values) {
+    if (value < 0 || value > static_cast<int64_t>(std::numeric_limits<uint32_t>::max())) {
+      bad_value = value;
+      return false;
+    }
+    out.insert(static_cast<uint32_t>(value));
+  }
+  return true;
 }
 
 }  // namespace
@@ -261,6 +280,24 @@ void AISLayer::onInitialize()
     "unknown_variance_threshold", rclcpp::ParameterValue(unknown_variance_threshold_));
   node->get_parameter(name_ + ".unknown_variance_threshold", unknown_variance_threshold_);
 
+  // Own-ship exclusion. A shore-side receiver hears the boat's own
+  // transponder; painting a stale dead-reckoned hull on top of the robot
+  // freezes the planner. Contacts whose MMSI is listed here never enter the
+  // track table.
+  declareParameter("ignore_mmsis", rclcpp::ParameterValue(std::vector<int64_t>{}));
+  std::vector<int64_t> ignore_mmsis;
+  node->get_parameter(name_ + ".ignore_mmsis", ignore_mmsis);
+  int64_t bad_mmsi = 0;
+  if (!parseIgnoreMmsis(ignore_mmsis, ignore_mmsis_, bad_mmsi)) {
+    // All-or-nothing: dropping only the malformed entries could leave the
+    // own-ship entry itself missing, which is the failure this parameter
+    // exists to prevent. Refuse the whole list loudly instead.
+    RCLCPP_ERROR_STREAM(
+      logger_, "AISLayer: ignore_mmsis entry "
+        << bad_mmsi << " is not a valid MMSI; ignoring the whole list.");
+    ignore_mmsis_.clear();
+  }
+
   // Parameters are external input, and a field config changes under pressure.
   // Every one of these can silently disable or invert the layer's safety
   // behaviour, so validate rather than trust.
@@ -349,6 +386,13 @@ void AISLayer::reset()
 void AISLayer::contactCallback(const marine_ais_msgs::msg::AISContact::ConstSharedPtr & msg)
 {
   std::lock_guard<std::mutex> lock(tracks_mutex_);
+  // Own ship (and anything else listed in ignore_mmsis) never becomes a
+  // track: a shore-side receiver hears the boat's own transponder, and
+  // painting a stale dead-reckoned hull on top of the robot freezes the
+  // planner.
+  if (ignore_mmsis_.count(msg->id) != 0) {
+    return;
+  }
   // One live track per MMSI: AIS repeats the whole contact on every report.
   tracks_[msg->id] = *msg;
 }
@@ -810,6 +854,32 @@ rcl_interfaces::msg::SetParametersResult AISLayer::dynamicParametersCallback(
       } else {
         result.successful = false;
         result.reason = full + " rejected: out of range";
+      }
+    } else if (type == rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY) {
+      if (key == "ignore_mmsis") {
+        std::set<uint32_t> parsed;
+        int64_t bad_mmsi = 0;
+        if (!parseIgnoreMmsis(parameter.as_integer_array(), parsed, bad_mmsi)) {
+          result.successful = false;
+          result.reason = full + " rejected: " + std::to_string(bad_mmsi) +
+            " is not a valid MMSI (must be in [0, 4294967295])";
+          continue;
+        }
+        std::lock_guard<std::mutex> lock(tracks_mutex_);
+        ignore_mmsis_ = parsed;
+        // A newly listed MMSI may already have a live track. Dropping it here
+        // rather than waiting for expiry is the point of setting this live:
+        // otherwise the own-ship hull stays painted for up to max_age.
+        for (auto it = tracks_.begin(); it != tracks_.end(); ) {
+          if (ignore_mmsis_.count(it->first) != 0) {
+            it = tracks_.erase(it);
+          } else {
+            ++it;
+          }
+        }
+      } else {
+        result.successful = false;
+        result.reason = full + " rejected: unknown integer-array parameter";
       }
     }
   }
