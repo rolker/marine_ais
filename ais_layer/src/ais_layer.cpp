@@ -645,6 +645,14 @@ void AISLayer::paintSweptPose(
         continue;
       }
 
+      const unsigned int index = row + static_cast<unsigned int>(i);
+      // Already at full contact cost from an earlier pose this cycle (which
+      // also touch()ed it): nothing can raise it further, so skip the exact
+      // hull-distance work. Swept poses overlap heavily, so this fires a lot.
+      if (costmap_[index] == contact_cost_) {
+        continue;
+      }
+
       const double distance = distanceToHull({world_x, world_y}, hull);
 
       unsigned char cost;
@@ -661,7 +669,6 @@ void AISLayer::paintSweptPose(
         continue;
       }
 
-      const unsigned int index = row + static_cast<unsigned int>(i);
       // Max-combine within our own layer: swept poses overlap heavily, and a
       // later, wider, softer pose must not erase an earlier lethal hull.
       if (costmap_[index] == NO_INFORMATION || cost > costmap_[index]) {
