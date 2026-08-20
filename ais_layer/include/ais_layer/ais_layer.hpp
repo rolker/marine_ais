@@ -13,6 +13,7 @@
 #include "geometry_msgs/msg/point.hpp"
 #include "marine_ais_msgs/msg/ais_contact.hpp"
 #include "nav2_costmap_2d/costmap_layer.hpp"
+#include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "nav2_costmap_2d/layered_costmap.hpp"
 #include "rclcpp/rclcpp.hpp"
 
@@ -26,6 +27,21 @@ struct Point2D
   double y{0.0};
 };
 
+/// @brief A vessel outline in world coordinates.
+///
+/// Carries a bounding circle alongside the vertices so rasterisation can reject
+/// or accept most cells arithmetically. Painting touches tens of thousands of
+/// cells per contact per cycle; running full point-in-polygon on every one of
+/// them is what pegged controller_server at the pier on 2026-08-20.
+struct Hull
+{
+  Point2D centre;
+  double radius{0.0};      ///< Circumscribed radius about `centre`.
+  double inscribed{0.0};   ///< Largest circle about `centre` wholly inside; 0 if unknown.
+  bool is_circle{false};   ///< True when the outline IS the circle (no heading / no dimensions).
+  std::vector<Point2D> vertices;  ///< Empty when `is_circle`.
+};
+
 /// @brief A vessel outline placed at one point along a dead-reckoned track,
 ///        together with the uncertainty envelope that applies at that instant.
 ///
@@ -35,8 +51,8 @@ struct Point2D
 /// region a widening corridor rather than a constant-width sausage.
 struct SweptPose
 {
-  std::vector<Point2D> hull;   ///< Vessel outline in world coordinates.
-  double envelope{0.0};        ///< Uncertainty margin outside the hull, metres.
+  Hull hull;
+  double envelope{0.0};    ///< Uncertainty margin outside the hull, metres.
 };
 
 /// @brief Nav2 costmap layer fed by AIS contacts (marine_ais_msgs/AISContact).
@@ -123,6 +139,23 @@ protected:
 
   void contactCallback(const marine_ais_msgs::msg::AISContact::ConstSharedPtr & msg);
 
+  /// @brief Apply runtime parameter changes.
+  ///
+  /// Without this, `enabled` is read once at construction and a costmap
+  /// clearing service or a `ros2 param set` reports success while changing
+  /// nothing -- which is exactly the wrong behaviour for a layer you may need
+  /// to stand down during a live deployment.
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
+    std::vector<rclcpp::Parameter> parameters);
+
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_;
+
+  /// @brief Clear only the region painted last cycle.
+  ///
+  /// Never resetMaps(): the global costmap is 4000x4000, and a full clear each
+  /// cycle is a 16 MB memset for a painted region a few hundred cells across.
+  void clearLastPaint();
+
   /// @brief Rasterise one swept pose into this layer's costmap.
   void paintSweptPose(
     const SweptPose & pose, double * min_x, double * min_y,
@@ -176,6 +209,24 @@ bool pointInPolygon(const Point2D & point, const std::vector<Point2D> & polygon)
 
 /// @brief Distance from @p point to @p polygon; zero when inside.
 double distanceToPolygon(const Point2D & point, const std::vector<Point2D> & polygon);
+
+/// @brief Distance from @p point to @p hull; zero when inside.
+///
+/// Uses the hull's bounding circles to answer arithmetically wherever it can:
+/// a circular hull needs no polygon work at all, and for a polygon a point
+/// inside the inscribed circle is inside the hull by construction.
+double distanceToHull(const Point2D & point, const Hull & hull);
+
+/// @brief Build a world-frame hull for a vessel.
+///
+/// @param centre     Placement in world coordinates.
+/// @param yaw        Heading, radians; ignored when @p oriented is false.
+/// @param oriented   Whether @p yaw is a real reported heading.
+/// @param body       Outline in body frame (x forward, y left), may be empty.
+/// @param fallback_radius  Radius used when no usable outline exists.
+Hull makeHull(
+  const Point2D & centre, double yaw, bool oriented,
+  const std::vector<Point2D> & body, double fallback_radius);
 
 }  // namespace ais_layer
 

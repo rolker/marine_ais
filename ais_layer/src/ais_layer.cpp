@@ -28,9 +28,6 @@ using marine_ais_msgs::msg::NavigationalStatus;
 using nav2_costmap_2d::LETHAL_OBSTACLE;
 using nav2_costmap_2d::NO_INFORMATION;
 
-namespace
-{
-
 /// Distance from a point to a line segment, zero-length segments included.
 double pointSegmentDistance(
   const Point2D & point, const Point2D & a, const Point2D & b)
@@ -46,22 +43,8 @@ double pointSegmentDistance(
   return std::hypot(point.x - (a.x + t * dx), point.y - (a.y + t * dy));
 }
 
-/// Number of vertices of the polygon approximating a heading-less contact.
-/// Twelve keeps the inscribed-radius error under 4% while staying cheap.
-constexpr int kCircleVertices = 12;
-
-/// Build a regular polygon of @p radius about @p centre.
-std::vector<Point2D> circleHull(const Point2D & centre, double radius)
+namespace
 {
-  std::vector<Point2D> hull;
-  hull.reserve(kCircleVertices);
-  for (int i = 0; i < kCircleVertices; ++i) {
-    const double angle = 2.0 * M_PI * static_cast<double>(i) / kCircleVertices;
-    hull.push_back({centre.x + radius * std::cos(angle),
-        centre.y + radius * std::sin(angle)});
-  }
-  return hull;
-}
 
 /// True when a quaternion is numerically usable.
 ///
@@ -117,6 +100,71 @@ double distanceToPolygon(const Point2D & point, const std::vector<Point2D> & pol
     best = std::min(best, pointSegmentDistance(point, polygon[j], polygon[i]));
   }
   return best;
+}
+
+Hull makeHull(
+  const Point2D & centre, double yaw, bool oriented,
+  const std::vector<Point2D> & body, double fallback_radius)
+{
+  Hull hull;
+  hull.centre = centre;
+
+  // Without a heading an oriented outline would be a fabrication, and without
+  // dimensions there is no outline at all. Either way fall back to a circle --
+  // which is also the cheap case to rasterise, since its distance is analytic.
+  if (body.size() < 3 || !oriented) {
+    double radius = 0.0;
+    for (const auto & p : body) {
+      radius = std::max(radius, std::hypot(p.x, p.y));
+    }
+    hull.is_circle = true;
+    hull.radius = (radius > 0.0) ? radius : fallback_radius;
+    hull.inscribed = hull.radius;
+    return hull;
+  }
+
+  const double cos_yaw = std::cos(yaw);
+  const double sin_yaw = std::sin(yaw);
+  hull.vertices.reserve(body.size());
+  for (const auto & p : body) {
+    hull.vertices.push_back(
+      {centre.x + p.x * cos_yaw - p.y * sin_yaw,
+        centre.y + p.x * sin_yaw + p.y * cos_yaw});
+    hull.radius = std::max(hull.radius, std::hypot(p.x, p.y));
+  }
+
+  // Largest circle about the centre that is still wholly inside the outline.
+  // Only meaningful if the centre is inside; the AIS reference point is, by
+  // construction from the A/B/C/D dimensions, but do not assume it.
+  if (pointInPolygon(centre, hull.vertices)) {
+    double inscribed = std::numeric_limits<double>::infinity();
+    const size_t n = hull.vertices.size();
+    for (size_t i = 0, j = n - 1; i < n; j = i++) {
+      inscribed = std::min(
+        inscribed, pointSegmentDistance(centre, hull.vertices[j], hull.vertices[i]));
+    }
+    hull.inscribed = std::isfinite(inscribed) ? inscribed : 0.0;
+  }
+  return hull;
+}
+
+double distanceToHull(const Point2D & point, const Hull & hull)
+{
+  const double dx = point.x - hull.centre.x;
+  const double dy = point.y - hull.centre.y;
+  const double d = std::hypot(dx, dy);
+
+  // A circular hull is exact arithmetic -- no polygon work at all.
+  if (hull.is_circle) {
+    return std::max(0.0, d - hull.radius);
+  }
+  // Inside the inscribed circle is inside the hull by construction.
+  if (d <= hull.inscribed) {
+    return 0.0;
+  }
+  // Outside the circumscribed circle cannot be inside, but the caller still
+  // wants the true distance, so fall through to the edges.
+  return distanceToPolygon(point, hull.vertices);
 }
 
 bool AISLayer::isDeadReckonable(uint8_t navigational_status)
@@ -273,6 +321,9 @@ void AISLayer::onInitialize()
     topic_, rclcpp::QoS(50),
     std::bind(&AISLayer::contactCallback, this, std::placeholders::_1));
 
+  parameter_callback_ = node->add_on_set_parameters_callback(
+    std::bind(&AISLayer::dynamicParametersCallback, this, std::placeholders::_1));
+
   RCLCPP_INFO(
     logger_,
     "AISLayer subscribed to '%s'; expiry class A %.0f s / class B %.0f s, "
@@ -377,7 +428,6 @@ std::vector<SweptPose> AISLayer::buildSweptPoses(
 
   // --- outline ---
   std::vector<Point2D> body_hull;
-  double circumscribed_radius = 0.0;
   for (const auto & p : contact.footprint.points) {
     if (!std::isfinite(p.x) || !std::isfinite(p.y)) {
       body_hull.clear();
@@ -386,7 +436,6 @@ std::vector<SweptPose> AISLayer::buildSweptPoses(
     const double px = static_cast<double>(p.x);
     const double py = static_cast<double>(p.y);
     body_hull.push_back({px, py});
-    circumscribed_radius = std::max(circumscribed_radius, std::hypot(px, py));
   }
   // calculatePolygon closes the ring by repeating the bow; the crossing-number
   // test treats the vertex list as implicitly closed, so drop the duplicate.
@@ -420,12 +469,6 @@ std::vector<SweptPose> AISLayer::buildSweptPoses(
     }
   }
 
-  // Without a heading, an oriented hull would be a fabrication. Fall back to a
-  // circle that still covers the vessel's true extent.
-  const bool use_circle = body_hull.size() < 3 || !yaw_known;
-  const double circle_radius =
-    (circumscribed_radius > 0.0) ? circumscribed_radius : default_vessel_radius_;
-
   // --- sample the corridor ---
   const double speed = std::hypot(velocity_x, velocity_y);
   const double travel = speed * prediction_time;
@@ -440,24 +483,12 @@ std::vector<SweptPose> AISLayer::buildSweptPoses(
     samples = std::clamp(samples, 1, max_samples_);
   }
 
-  const double cos_yaw = std::cos(yaw);
-  const double sin_yaw = std::sin(yaw);
-
   const auto emit = [&](double t) {
       SweptPose pose;
       pose.envelope = std::min(
         sigma_scale_ * (position_sigma + growth_rate * t), max_envelope_);
       const Point2D centre{origin.x + velocity_x * t, origin.y + velocity_y * t};
-      if (use_circle) {
-        pose.hull = circleHull(centre, circle_radius);
-      } else {
-        pose.hull.reserve(body_hull.size());
-        for (const auto & p : body_hull) {
-          pose.hull.push_back(
-            {centre.x + p.x * cos_yaw - p.y * sin_yaw,
-              centre.y + p.x * sin_yaw + p.y * cos_yaw});
-        }
-      }
+      pose.hull = makeHull(centre, yaw, yaw_known, body_hull, default_vessel_radius_);
       poses.push_back(pose);
     };
 
@@ -478,39 +509,50 @@ std::vector<SweptPose> AISLayer::buildSweptPoses(
 void AISLayer::paintSweptPose(
   const SweptPose & pose, double * min_x, double * min_y, double * max_x, double * max_y)
 {
-  if (pose.hull.size() < 3) {
+  const Hull & hull = pose.hull;
+  if (!hull.is_circle && hull.vertices.size() < 3) {
+    return;
+  }
+  if (!(std::isfinite(hull.centre.x) && std::isfinite(hull.centre.y))) {
     return;
   }
 
-  double hull_min_x = std::numeric_limits<double>::max();
-  double hull_min_y = std::numeric_limits<double>::max();
-  double hull_max_x = std::numeric_limits<double>::lowest();
-  double hull_max_y = std::numeric_limits<double>::lowest();
-  for (const auto & p : pose.hull) {
-    hull_min_x = std::min(hull_min_x, p.x);
-    hull_min_y = std::min(hull_min_y, p.y);
-    hull_max_x = std::max(hull_max_x, p.x);
-    hull_max_y = std::max(hull_max_y, p.y);
-  }
-
   const double envelope = std::max(pose.envelope, 0.0);
-  hull_min_x -= envelope;
-  hull_min_y -= envelope;
-  hull_max_x += envelope;
-  hull_max_y += envelope;
+  // Everything this pose can affect lies within one circle about the hull
+  // centre. Bounding the sweep by that circle -- rather than by the hull's
+  // axis-aligned box -- is what lets the inner loop reject a cell with two
+  // multiplies instead of a full point-in-polygon test.
+  const double reach = hull.radius + envelope;
+  const double reach_squared = reach * reach;
 
   int cell_min_x, cell_min_y, cell_max_x, cell_max_y;
-  worldToMapEnforceBounds(hull_min_x, hull_min_y, cell_min_x, cell_min_y);
-  worldToMapEnforceBounds(hull_max_x, hull_max_y, cell_max_x, cell_max_y);
+  worldToMapEnforceBounds(hull.centre.x - reach, hull.centre.y - reach, cell_min_x, cell_min_y);
+  worldToMapEnforceBounds(hull.centre.x + reach, hull.centre.y + reach, cell_max_x, cell_max_y);
 
   const double cost_span =
     static_cast<double>(contact_cost_) - static_cast<double>(envelope_edge_cost_);
+  const double resolution = getResolution();
+  const double origin_x = getOriginX();
+  const double origin_y = getOriginY();
 
   for (int j = cell_min_y; j <= cell_max_y; ++j) {
+    const double world_y = origin_y + (static_cast<double>(j) + 0.5) * resolution;
+    const double dy = world_y - hull.centre.y;
+    const double dy_squared = dy * dy;
+    // Whole row outside the reach circle: skip without touching a cell.
+    if (dy_squared > reach_squared) {
+      continue;
+    }
+    const unsigned int row = static_cast<unsigned int>(j) * getSizeInCellsX();
+
     for (int i = cell_min_x; i <= cell_max_x; ++i) {
-      double world_x, world_y;
-      mapToWorld(static_cast<unsigned int>(i), static_cast<unsigned int>(j), world_x, world_y);
-      const double distance = distanceToPolygon({world_x, world_y}, pose.hull);
+      const double world_x = origin_x + (static_cast<double>(i) + 0.5) * resolution;
+      const double dx = world_x - hull.centre.x;
+      if (dx * dx + dy_squared > reach_squared) {
+        continue;
+      }
+
+      const double distance = distanceToHull({world_x, world_y}, hull);
 
       unsigned char cost;
       if (distance <= 0.0) {
@@ -526,8 +568,7 @@ void AISLayer::paintSweptPose(
         continue;
       }
 
-      const unsigned int index = getIndex(
-        static_cast<unsigned int>(i), static_cast<unsigned int>(j));
+      const unsigned int index = row + static_cast<unsigned int>(i);
       // Max-combine within our own layer: swept poses overlap heavily, and a
       // later, wider, softer pose must not erase an earlier lethal hull.
       if (costmap_[index] == NO_INFORMATION || cost > costmap_[index]) {
@@ -543,6 +584,19 @@ void AISLayer::updateBounds(
   double * min_x, double * min_y, double * max_x, double * max_y)
 {
   if (!enabled_) {
+    // Disabling must actually erase. Clear whatever is still painted and keep
+    // requesting its extent one last time so the master drops it too --
+    // otherwise a layer switched off at runtime leaves its last frame frozen
+    // on the costmap, which is worse than leaving it on.
+    if (has_last_bounds_) {
+      *min_x = std::min(*min_x, last_min_x_);
+      *min_y = std::min(*min_y, last_min_y_);
+      *max_x = std::max(*max_x, last_max_x_);
+      *max_y = std::max(*max_y, last_max_y_);
+      clearLastPaint();
+      has_last_bounds_ = false;
+    }
+    current_ = true;
     return;
   }
 
@@ -553,7 +607,12 @@ void AISLayer::updateBounds(
   // Every contact has moved since last cycle, so last cycle's paint is stale by
   // construction. Clear it, and keep asking for its extent so the master clears
   // there too -- nav2 only resets the master over the bounds layers request.
-  resetMaps();
+  //
+  // Clear ONLY what was painted, never the whole map. The global costmap here
+  // is 4000x4000 at 1 m; a full resetMaps() every cycle was a 16 MB memset per
+  // update and by itself pegged planner_server at the pier on 2026-08-20. The
+  // painted region is a few hundred cells across.
+  clearLastPaint();
   if (has_last_bounds_) {
     *min_x = std::min(*min_x, last_min_x_);
     *min_y = std::min(*min_y, last_min_y_);
@@ -659,6 +718,102 @@ void AISLayer::updateBounds(
   }
 
   current_ = true;
+}
+
+void AISLayer::clearLastPaint()
+{
+  if (!has_last_bounds_) {
+    return;
+  }
+  int x0, y0, xn, yn;
+  worldToMapEnforceBounds(last_min_x_, last_min_y_, x0, y0);
+  worldToMapEnforceBounds(last_max_x_, last_max_y_, xn, yn);
+  if (xn < x0 || yn < y0) {
+    return;
+  }
+  // Clear to default_value_ EXPLICITLY rather than relying on resetMap's
+  // documented-nowhere fill value. This layer's default is NO_INFORMATION,
+  // which updateWithMax skips; were these cells to come back as FREE_SPACE
+  // instead, updateWithMax would overwrite unknown master cells with free and
+  // this layer would start declaring unsurveyed water navigable.
+  resetMapToValue(
+    static_cast<unsigned int>(x0), static_cast<unsigned int>(y0),
+    static_cast<unsigned int>(xn) + 1, static_cast<unsigned int>(yn) + 1,
+    default_value_);
+}
+
+rcl_interfaces::msg::SetParametersResult AISLayer::dynamicParametersCallback(
+  std::vector<rclcpp::Parameter> parameters)
+{
+  rcl_interfaces::msg::SetParametersResult result;
+  result.successful = true;
+
+  // Serialise against updateBounds/updateCosts, which run on the costmap
+  // thread and read every one of these.
+  std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
+
+  for (const auto & parameter : parameters) {
+    const std::string & full = parameter.get_name();
+    if (full.rfind(name_ + ".", 0) != 0) {
+      continue;
+    }
+    const std::string key = full.substr(name_.size() + 1);
+    const auto type = parameter.get_type();
+
+    if (key == "enabled" && type == rclcpp::ParameterType::PARAMETER_BOOL) {
+      enabled_ = parameter.as_bool();
+      RCLCPP_INFO(logger_, "AISLayer %s", enabled_ ? "enabled" : "DISABLED");
+    } else if (type == rclcpp::ParameterType::PARAMETER_DOUBLE) {
+      const double value = parameter.as_double();
+      // Reject rather than accept-and-degrade: a bad value set live is a typo
+      // under pressure, and silently running on it is how a layer stops
+      // keeping the boat away from things.
+      if (!std::isfinite(value)) {
+        result.successful = false;
+        result.reason = full + " must be finite";
+        continue;
+      }
+      if (key == "sigma_scale" && value > 0.0) {
+        sigma_scale_ = value;
+      } else if (key == "max_prediction_time" && value >= 0.0) {
+        max_prediction_time_ = value;
+      } else if (key == "max_envelope" && value > 0.0) {
+        max_envelope_ = value;
+      } else if (key == "unknown_speed" && value >= 0.0) {
+        unknown_speed_ = value;
+      } else if (key == "default_vessel_radius" && value > 0.0) {
+        default_vessel_radius_ = value;
+      } else if (key == "default_position_sigma" && value > 0.0) {
+        default_position_sigma_ = value;
+      } else if (key == "default_speed_sigma" && value > 0.0) {
+        default_speed_sigma_ = value;
+      } else if (key == "max_age_class_a" && value > 0.0) {
+        max_age_class_a_ = value;
+      } else if (key == "max_age_class_b" && value > 0.0) {
+        max_age_class_b_ = value;
+      } else if (key == "max_age_default" && value > 0.0) {
+        max_age_default_ = value;
+      } else if (key == "unknown_variance_threshold" && value > 0.0) {
+        unknown_variance_threshold_ = value;
+      } else {
+        result.successful = false;
+        result.reason = full + " rejected: out of range";
+      }
+    } else if (type == rclcpp::ParameterType::PARAMETER_INTEGER) {
+      const int64_t value = parameter.as_int();
+      if (key == "max_samples" && value >= 1) {
+        max_samples_ = static_cast<int>(value);
+      } else if (key == "contact_cost" && value >= 1 && value < NO_INFORMATION) {
+        contact_cost_ = static_cast<unsigned char>(value);
+      } else if (key == "envelope_edge_cost" && value >= 1 && value <= contact_cost_) {
+        envelope_edge_cost_ = static_cast<unsigned char>(value);
+      } else {
+        result.successful = false;
+        result.reason = full + " rejected: out of range";
+      }
+    }
+  }
+  return result;
 }
 
 void AISLayer::updateCosts(

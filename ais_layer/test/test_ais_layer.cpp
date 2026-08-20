@@ -10,10 +10,14 @@
 #include "ais_layer/ais_layer.hpp"
 #include "marine_ais_msgs/msg/ais_contact.hpp"
 #include "marine_ais_msgs/msg/navigational_status.hpp"
+#include "nav2_costmap_2d/cost_values.hpp"
 
 using ais_layer::Point2D;
 using ais_layer::SweptPose;
+using ais_layer::Hull;
+using ais_layer::distanceToHull;
 using ais_layer::distanceToPolygon;
+using ais_layer::makeHull;
 using ais_layer::pointInPolygon;
 using marine_ais_msgs::msg::AISContact;
 using marine_ais_msgs::msg::NavigationalStatus;
@@ -37,6 +41,15 @@ public:
   using AISLayer::max_samples_;
   using AISLayer::sigma_scale_;
   using AISLayer::unknown_speed_;
+  // Clearing internals, for the NO_INFORMATION regression test below.
+  using AISLayer::clearLastPaint;
+  using AISLayer::has_last_bounds_;
+  using AISLayer::last_max_x_;
+  using AISLayer::last_max_y_;
+  using AISLayer::last_min_x_;
+  using AISLayer::last_min_y_;
+  using nav2_costmap_2d::Costmap2D::default_value_;
+  using nav2_costmap_2d::Costmap2D::resetMaps;
 };
 
 /// A symmetric rectangular hull, so the vertex mean equals the placed centre
@@ -79,18 +92,6 @@ AISContact makeContact(
 
   contact.footprint.points = rectangleFootprint(5.0f, 3.0f);
   return contact;
-}
-
-Point2D centroid(const std::vector<Point2D> & hull)
-{
-  Point2D sum;
-  for (const auto & p : hull) {
-    sum.x += p.x;
-    sum.y += p.y;
-  }
-  sum.x /= static_cast<double>(hull.size());
-  sum.y /= static_cast<double>(hull.size());
-  return sum;
 }
 
 const std::vector<Point2D> kUnitSquare = {{0.0, 0.0}, {10.0, 0.0}, {10.0, 10.0}, {0.0, 10.0}};
@@ -188,7 +189,7 @@ TEST(SweptPoses, StationaryContactDoesNotMove)
   const auto poses = layer.buildSweptPoses(contact, {100.0, 200.0}, 60.0);
 
   ASSERT_EQ(1u, poses.size());
-  const Point2D placed = centroid(poses.front().hull);
+  const Point2D placed = poses.front().hull.centre;
   EXPECT_NEAR(100.0, placed.x, 1e-6);
   EXPECT_NEAR(200.0, placed.y, 1e-6);
 }
@@ -221,8 +222,8 @@ TEST(SweptPoses, MovingContactSweepsFromFixToPrediction)
   const auto poses = layer.buildSweptPoses(contact, {0.0, 0.0}, 20.0);
 
   ASSERT_GE(poses.size(), 2u);
-  const Point2D first = centroid(poses.front().hull);
-  const Point2D last = centroid(poses.back().hull);
+  const Point2D first = poses.front().hull.centre;
+  const Point2D last = poses.back().hull.centre;
   EXPECT_NEAR(0.0, first.x, 1e-6);
   EXPECT_NEAR(0.0, first.y, 1e-6);
   EXPECT_NEAR(100.0, last.x, 1e-6);
@@ -262,7 +263,7 @@ TEST(SweptPoses, UnknownVelocityGrowsAReachableSetWithoutMoving)
 
   // Nowhere to propagate to, but the vessel could be anywhere within reach.
   ASSERT_EQ(1u, poses.size());
-  const Point2D placed = centroid(poses.front().hull);
+  const Point2D placed = poses.front().hull.centre;
   EXPECT_NEAR(0.0, placed.x, 1e-6);
   EXPECT_NEAR(0.0, placed.y, 1e-6);
   // 1.0 * (10 m fix error + 5 m/s * 20 s) = 110 m.
@@ -280,7 +281,7 @@ TEST(SweptPoses, PredictionIsCappedSoAncientContactsDoNotFlyOffTheMap)
   const auto poses = layer.buildSweptPoses(contact, {0.0, 0.0}, 600.0);
 
   ASSERT_GE(poses.size(), 2u);
-  EXPECT_NEAR(300.0, centroid(poses.back().hull).x, 1e-6);
+  EXPECT_NEAR(300.0, poses.back().hull.centre.x, 1e-6);
 }
 
 TEST(SweptPoses, EnvelopeIsCapped)
@@ -383,7 +384,7 @@ TEST(SweptPoses, KnownHeadingOrientsTheHull)
   ASSERT_FALSE(poses.empty());
   double max_x = 0.0;
   double max_y = 0.0;
-  for (const auto & p : poses.front().hull) {
+  for (const auto & p : poses.front().hull.vertices) {
     max_x = std::max(max_x, std::abs(p.x));
     max_y = std::max(max_y, std::abs(p.y));
   }
@@ -404,11 +405,9 @@ TEST(SweptPoses, MissingHeadingFallsBackToACircle)
   const auto poses = layer.buildSweptPoses(contact, {0.0, 0.0}, 0.0);
 
   ASSERT_FALSE(poses.empty());
-  // A circle of the circumscribed radius: every vertex the same distance out.
-  const double expected = std::hypot(5.0, 3.0);
-  for (const auto & p : poses.front().hull) {
-    EXPECT_NEAR(expected, std::hypot(p.x, p.y), 1e-6);
-  }
+  EXPECT_TRUE(poses.front().hull.is_circle);
+  EXPECT_TRUE(poses.front().hull.vertices.empty());
+  EXPECT_NEAR(std::hypot(5.0, 3.0), poses.front().hull.radius, 1e-6);
 }
 
 TEST(SweptPoses, MissingFootprintFallsBackToTheDefaultRadius)
@@ -422,9 +421,8 @@ TEST(SweptPoses, MissingFootprintFallsBackToTheDefaultRadius)
   const auto poses = layer.buildSweptPoses(contact, {0.0, 0.0}, 0.0);
 
   ASSERT_FALSE(poses.empty());
-  for (const auto & p : poses.front().hull) {
-    EXPECT_NEAR(12.0, std::hypot(p.x, p.y), 1e-6);
-  }
+  EXPECT_TRUE(poses.front().hull.is_circle);
+  EXPECT_NEAR(12.0, poses.front().hull.radius, 1e-6);
 }
 
 TEST(SweptPoses, NonFiniteFootprintIsRejected)
@@ -439,10 +437,9 @@ TEST(SweptPoses, NonFiniteFootprintIsRejected)
   // A NaN vertex would make every distance comparison false and silently
   // punch a hole in the painted hull; fall back to the circle instead.
   ASSERT_FALSE(poses.empty());
-  for (const auto & p : poses.front().hull) {
-    EXPECT_TRUE(std::isfinite(p.x));
-    EXPECT_TRUE(std::isfinite(p.y));
-  }
+  EXPECT_TRUE(poses.front().hull.is_circle);
+  EXPECT_TRUE(std::isfinite(poses.front().hull.radius));
+  EXPECT_GT(poses.front().hull.radius, 0.0);
 }
 
 TEST(SweptPoses, NegativeAgeIsClamped)
@@ -456,7 +453,7 @@ TEST(SweptPoses, NegativeAgeIsClamped)
   const auto poses = layer.buildSweptPoses(contact, {0.0, 0.0}, -30.0);
 
   ASSERT_EQ(1u, poses.size());
-  EXPECT_NEAR(0.0, centroid(poses.front().hull).x, 1e-6);
+  EXPECT_NEAR(0.0, poses.front().hull.centre.x, 1e-6);
   EXPECT_NEAR(5.0, poses.front().envelope, 1e-6);
 }
 
@@ -473,7 +470,7 @@ TEST(SweptPoses, CourseProvidesHeadingWhenTrueHeadingIsAbsent)
   // Making way due north, so the 10 m hull should be long in y, not x.
   double max_x = 0.0;
   double max_y = 0.0;
-  for (const auto & p : poses.front().hull) {
+  for (const auto & p : poses.front().hull.vertices) {
     max_x = std::max(max_x, std::abs(p.x));
     max_y = std::max(max_y, std::abs(p.y));
   }
@@ -498,8 +495,135 @@ TEST(SweptPoses, IdentityQuaternionIsNotMistakenForAHeading)
   const auto poses = layer.buildSweptPoses(contact, {0.0, 0.0}, 0.0);
 
   ASSERT_FALSE(poses.empty());
-  const double expected = std::hypot(5.0, 3.0);
-  for (const auto & p : poses.front().hull) {
-    EXPECT_NEAR(expected, std::hypot(p.x, p.y), 1e-6);
+  EXPECT_TRUE(poses.front().hull.is_circle);
+  EXPECT_NEAR(std::hypot(5.0, 3.0), poses.front().hull.radius, 1e-6);
+}
+
+// --- hull construction and the fast distance paths ---------------------
+
+TEST(HullGeometry, NoHeadingGivesACircleCoveringTheVesselExtent)
+{
+  const std::vector<Point2D> body = {{5.0, 3.0}, {-5.0, 3.0}, {-5.0, -3.0}, {5.0, -3.0}};
+  const Hull hull = makeHull({10.0, 20.0}, 0.0, false, body, 7.0);
+
+  EXPECT_TRUE(hull.is_circle);
+  EXPECT_NEAR(10.0, hull.centre.x, 1e-9);
+  EXPECT_NEAR(20.0, hull.centre.y, 1e-9);
+  // Circumscribed, so the circle still covers the corners of the real hull.
+  EXPECT_NEAR(std::hypot(5.0, 3.0), hull.radius, 1e-9);
+}
+
+TEST(HullGeometry, NoDimensionsFallsBackToTheGivenRadius)
+{
+  const Hull hull = makeHull({0.0, 0.0}, 0.0, true, {}, 7.0);
+  EXPECT_TRUE(hull.is_circle);
+  EXPECT_NEAR(7.0, hull.radius, 1e-9);
+}
+
+TEST(HullGeometry, OrientedHullCarriesUsableBoundingCircles)
+{
+  const std::vector<Point2D> body = {{5.0, 3.0}, {-5.0, 3.0}, {-5.0, -3.0}, {5.0, -3.0}};
+  const Hull hull = makeHull({0.0, 0.0}, 0.0, true, body, 7.0);
+
+  ASSERT_FALSE(hull.is_circle);
+  ASSERT_EQ(4u, hull.vertices.size());
+  // The rasteriser rejects on the circumscribed circle and accepts on the
+  // inscribed one, so both must bound the real outline correctly.
+  EXPECT_NEAR(std::hypot(5.0, 3.0), hull.radius, 1e-9);
+  EXPECT_NEAR(3.0, hull.inscribed, 1e-9);
+  for (const auto & v : hull.vertices) {
+    EXPECT_LE(std::hypot(v.x, v.y), hull.radius + 1e-9);
+    EXPECT_GE(std::hypot(v.x, v.y), hull.inscribed - 1e-9);
   }
+}
+
+TEST(HullGeometry, CircleDistanceIsAnalytic)
+{
+  const Hull hull = makeHull({0.0, 0.0}, 0.0, false, {}, 10.0);
+  EXPECT_DOUBLE_EQ(0.0, distanceToHull({0.0, 0.0}, hull));
+  EXPECT_DOUBLE_EQ(0.0, distanceToHull({10.0, 0.0}, hull));
+  EXPECT_NEAR(5.0, distanceToHull({15.0, 0.0}, hull), 1e-9);
+  EXPECT_NEAR(2.0, distanceToHull({0.0, -12.0}, hull), 1e-9);
+}
+
+TEST(HullGeometry, PolygonFastPathAgreesWithTheExactDistance)
+{
+  const std::vector<Point2D> body = {{5.0, 3.0}, {-5.0, 3.0}, {-5.0, -3.0}, {5.0, -3.0}};
+  const Hull hull = makeHull({0.0, 0.0}, 0.0, true, body, 7.0);
+
+  // The inscribed-circle shortcut must never disagree with the real polygon
+  // distance -- that shortcut is the whole performance fix, and a wrong
+  // answer inside the hull would silently stop painting a vessel.
+  for (double x = -12.0; x <= 12.0; x += 0.5) {
+    for (double y = -12.0; y <= 12.0; y += 0.5) {
+      const Point2D p{x, y};
+      EXPECT_NEAR(distanceToPolygon(p, hull.vertices), distanceToHull(p, hull), 1e-9)
+        << "disagreement at (" << x << ", " << y << ")";
+    }
+  }
+}
+
+TEST(HullGeometry, RotatedHullPlacesVerticesCorrectly)
+{
+  const std::vector<Point2D> body = {{5.0, 3.0}, {-5.0, 3.0}, {-5.0, -3.0}, {5.0, -3.0}};
+  // 90 degrees: bow swings from +x to +y.
+  const Hull hull = makeHull({0.0, 0.0}, M_PI / 2.0, true, body, 7.0);
+
+  ASSERT_FALSE(hull.is_circle);
+  double max_x = 0.0, max_y = 0.0;
+  for (const auto & v : hull.vertices) {
+    max_x = std::max(max_x, std::abs(v.x));
+    max_y = std::max(max_y, std::abs(v.y));
+  }
+  EXPECT_NEAR(3.0, max_x, 1e-9);
+  EXPECT_NEAR(5.0, max_y, 1e-9);
+}
+
+TEST(ClearPaint, RestoresNoInformationNeverFreeSpace)
+{
+  TestableAISLayer layer;
+  layer.default_value_ = nav2_costmap_2d::NO_INFORMATION;
+  layer.resizeMap(20, 20, 1.0, 0.0, 0.0);
+  layer.resetMaps();
+  ASSERT_EQ(nav2_costmap_2d::NO_INFORMATION, layer.getCost(5, 5));
+
+  layer.setCost(5, 5, nav2_costmap_2d::LETHAL_OBSTACLE);
+  layer.setCost(6, 6, 200);
+  layer.last_min_x_ = 4.0;
+  layer.last_min_y_ = 4.0;
+  layer.last_max_x_ = 7.0;
+  layer.last_max_y_ = 7.0;
+  layer.has_last_bounds_ = true;
+
+  layer.clearLastPaint();
+
+  // Must come back UNKNOWN. FREE_SPACE here would make updateWithMax overwrite
+  // unknown master cells with free -- i.e. this layer declaring unsurveyed
+  // water navigable, which is the worst thing an obstacle layer can do.
+  EXPECT_EQ(nav2_costmap_2d::NO_INFORMATION, layer.getCost(5, 5));
+  EXPECT_EQ(nav2_costmap_2d::NO_INFORMATION, layer.getCost(6, 6));
+  EXPECT_NE(nav2_costmap_2d::FREE_SPACE, layer.getCost(5, 5));
+}
+
+TEST(ClearPaint, LeavesCellsOutsideTheLastBoundsAlone)
+{
+  TestableAISLayer layer;
+  layer.default_value_ = nav2_costmap_2d::NO_INFORMATION;
+  layer.resizeMap(20, 20, 1.0, 0.0, 0.0);
+  layer.resetMaps();
+
+  layer.setCost(2, 2, 111);   // outside the window below
+  layer.setCost(5, 5, 222);   // inside
+  layer.last_min_x_ = 4.0;
+  layer.last_min_y_ = 4.0;
+  layer.last_max_x_ = 7.0;
+  layer.last_max_y_ = 7.0;
+  layer.has_last_bounds_ = true;
+
+  layer.clearLastPaint();
+
+  // The whole point of the bounded clear: it must not touch the rest of a
+  // 16-million-cell map.
+  EXPECT_EQ(111, layer.getCost(2, 2));
+  EXPECT_EQ(nav2_costmap_2d::NO_INFORMATION, layer.getCost(5, 5));
 }
