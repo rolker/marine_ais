@@ -54,7 +54,7 @@ setup(
     maintainer_email='roland@ccom.unh.edu',
     description='nodes for decoding and publishing AIS data',
     license='BSD-3-Clause',
-    tests_require=['pytest'],
+    extras_require={'test': ['pytest']},
     entry_points={
         'console_scripts': [
             'ais_parser = marine_ais_tools.ais_parser:main',
