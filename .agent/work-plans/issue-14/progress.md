@@ -78,3 +78,45 @@ Also settled by the owner before this run: the records under `.agent/work-plans/
 **Plan**: `.agent/work-plans/issue-14/plan.md` at `014add3`
 
 One commit per Rolling fix (setup.py extras_require, logger warning, tf2/utils.hpp, geodesy via include/library variables since it exports no target), then a Jazzy+Rolling CI workflow (Rolling leg msgs+tools only) triggered on rolling and jazzy so it cherry-picks to jazzy; ais_layer on Rolling checked by hand.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-11-19 12:13 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Verdict**: needs-work
+
+**Issue**: #14 — Build on ROS 2 Rolling: port ais_layer and marine_ais_tools, add a rolling branch
+**Plan**: `.agent/work-plans/issue-14/plan.md` at `014add3`
+**Branch**: `feature/issue-14`
+
+### Evaluation
+
+| Dimension | Verdict | Notes |
+|---|---|---|
+| Scope | Good | One PR to `rolling`, one commit per fix, CI commit standalone; backport outside. |
+| Issue alignment | Needs work | Serves: "None (project has no written goals); no project design document. Part of rolker/unh_marine_autonomy#415." All four Issue Review actions are taken up, but the Jazzy-leg dependency claim is wrong (finding 1), so "Jazzy leg all three packages" would fail as planned. |
+| File targeting | Good | Right files; `ais_layer/package.xml` may need a `geodesy` version note (finding 1). |
+| Consequences | Needs work | The Jazzy leg's `geodesy` source requirement and its effect on the cherry-picked workflow on `jazzy` are not captured. |
+| Principle alignment | Good | Verify-before-claiming is well kept (Jazzy claims limited to CI); one step tests a form known not to work (finding 2). |
+| ADR compliance | Good | 0002, 0013, 0019 addressed. |
+| ROS conventions | Needs work | CMake target/variable use is right in direction; geoconv library must be linked (finding 2). |
+
+### Findings
+
+1. **[Issue alignment / Consequences] (high)** — The Jazzy leg will not build `ais_layer` with rosdep's released `geodesy`. `ais_layer.cpp` includes `geodesy/ecef.h` and uses `geodesy::ECEFPoint`; ECEF support was added in geographic_info 491eff4 ("Add ECEF support…", #60), first released as 1.0.7 (tag 6ad4ef3, May 2026). rosdistro `jazzy/distribution.yaml` has geographic_info at `1.0.6-2`, whose `geodesy/include` holds only `utm.h` and `wgs84.h` (checked at 24806ad, the 1.0.6 bump, and at `origin/jazzy`). Local builds never saw this because `project11.manifest.yaml` builds geographic_info from source (`ros2`) for every distro. The plan's step 7 ("rosdep pulls … `geodesy` as released packages") therefore fails on the PR to `rolling` and again on the backport PR to `jazzy`. Resolution within option B: the Jazzy leg clones geographic_info at a pinned ref (tag `1.0.7` or later) into the CI workspace's `src/` before rosdep (`--ignore-src` then skips it), the header comment says why and when it can be dropped (a Jazzy release of geodesy ≥ 1.0.7), and optionally `ais_layer/package.xml` states `<depend version_gte="1.0.7">geodesy</depend>` so the requirement is visible.
+2. **[ROS conventions] (medium)** — The geodesy library is needed; drop the "include dirs alone" experiment in step 5. `ECEFPoint(const geographic_msgs::msg::GeoPoint &)` is declared in `ecef.h` but defined in `src/conv/ecef_conversions.cpp`, which is compiled into the exported static library `geoconv`. Because `ais_layer` is a SHARED library, an include-only form may still link and only fail at the gtest link or at plugin load, which reads like a success at step 5. Use `target_include_directories(${PROJECT_NAME} PUBLIC ${geodesy_INCLUDE_DIRS})` plus `${geodesy_LIBRARIES}` in `target_link_libraries`. On the open question: the export shape is the same on 1.0.6 (`origin/jazzy`) and 1.0.7/`ros2` (`ament_export_libraries(geoconv)`, `ament_export_include_directories(include)`, no exported target), so this form is distro-neutral once finding 1 supplies 1.0.7 on Jazzy.
+3. **[ROS conventions / CI design] (medium)** — The guard as written ("job `if` … so a PR or push to `jazzy` runs the Jazzy leg only") does not work on a single matrix job: `jobs.<id>.if` cannot read the `matrix` context, so it can only skip both legs. Use either two jobs (a Jazzy job, and a Rolling job with `if: (github.base_ref || github.ref_name) != 'jazzy'`), or a matrix computed by expression from `github.base_ref || github.ref_name` (with `include` entries carrying the per-leg `packages` field). `github.base_ref` covers pull requests, `github.ref_name` covers pushes; the plan names both, keep both. Two jobs also make the Jazzy-only source checkout of finding 1 simpler.
+4. **[Consequences] (low)** — Factual correction for the header comment and PR text: Rolling does have a `geodesy` release (rosdistro rolling geographic_info `1.0.7-4`); only navigation2 lacks a Rolling release. The Rolling leg's rosdep step therefore needs to avoid only the Nav2 keys; installing from the selected package paths (`--from-paths` naming `marine_ais_msgs` and `marine_ais_tools`) is the simplest form.
+5. **[Issue alignment] (info)** — `tf2/utils.hpp` exists on Jazzy: added to the `jazzy` branch of ros2/geometry2 by "Jazzy 'Backport' of #720 (#723)" on 2024-12-19 and present at the branch tip (tf2 0.36.23). Step 4 is safe; the plan's "unverified" can be dropped.
+
+### Summary
+
+The fix list and commit structure are sound and the review-issue actions are carried, but the CI Jazzy leg as planned would fail on `ais_layer` because Jazzy's released `geodesy` (1.0.6) predates the ECEF headers the code uses, and the proposed per-leg guard cannot be expressed as a job `if` on a matrix job. Fix those two points (and link `geoconv`) before implementing.
+
+### Recommended Actions
+
+- [ ] Step 7: Jazzy leg builds geographic_info from source at a pinned ref (≥ 1.0.7) before rosdep; state why in the workflow header; consider `version_gte="1.0.7"` on the `geodesy` depend.
+- [ ] Step 5: link `${geodesy_LIBRARIES}` and use `${geodesy_INCLUDE_DIRS}`; drop the include-only trial.
+- [ ] Step 7: implement the `jazzy` guard as two jobs or an expression-computed matrix, not a job `if` on the matrix job.
+- [ ] Correct the "geodesy has no Rolling release" wording; restrict the Rolling leg's rosdep to the selected package paths.
+- [ ] Step 4: mark `tf2/utils.hpp` on Jazzy as confirmed (geometry2 #723).
