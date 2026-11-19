@@ -88,6 +88,18 @@ if(BUILD_TESTING)
     tf2_ros::tf2_ros
   )
 
+  # The lifecycle node is nav2_util's on Jazzy and nav2_ros_common's on
+  # Rolling; the latter comes through nav2_costmap_2d_core, so no
+  # distro-specific package is named here.
+  ament_add_gtest(test_initialize test/test_initialize.cpp)
+  target_link_libraries(test_initialize
+    ${PROJECT_NAME}
+    nav2_costmap_2d::nav2_costmap_2d_core
+    nav2_util::nav2_util_core
+    rclcpp::rclcpp
+    tf2_ros::tf2_ros
+  )
+
   ament_add_gtest(test_plugin_loading test/test_plugin_loading.cpp)
   target_link_libraries(test_plugin_loading
     nav2_costmap_2d::nav2_costmap_2d_core
