@@ -289,3 +289,26 @@ Asked "Publish now, or take the suggestions first?" with the pre-push review's v
 - `count_subscribers` relies on the RMW updating the local graph synchronously (true for the default Fast DDS here).
 
 Full pre-commit pass left to the host.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-11-19 13:07 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Dispatch**: resumed (agent aa657c595cfe6ad75, resume 1 of 3)
+**Verdict**: changes-requested
+
+**Branch**: feature/issue-14 at `fd49071`
+**Base**: origin/rolling
+**Depth**: Standard (reason: adds `.github/workflows/ci.yml`; whole-diff classification, fix round)
+**Must-fix**: 1 | **Suggestions**: 1
+**Round**: 2 | **Ship**: continue — round 2: must-fix rising (0 -> 1); the one must-fix is a mechanical one-line pin
+
+All five round-1 suggestions are addressed correctly (60177d0, 1c99696, ffb596c, 0668537, 3a6fdca). Checked:
+- `test_initialize.cpp` against navigation2 `origin/jazzy`: `nav2_ros_common` is absent there, so `__has_include` picks `nav2_util::LifecycleNode`. Its `(name, ns = "", options)` constructor matches. `Layer::initialize` takes `const nav2_util::LifecycleNode::WeakPtr &`; `nav2_util::LifecycleNode` defines no smart-pointer types of its own, so that is `std::weak_ptr<rclcpp_lifecycle::LifecycleNode>`, built implicitly from the `shared_ptr`. `tf2_ros::Buffer` comes in through Jazzy `layer.hpp`. `nav2_util::nav2_util_core` is exported.
+- PUBLIC/PRIVATE split: the public header includes only geographic_msgs, geometry_msgs, marine_ais_msgs, nav2_costmap_2d and rclcpp, all PUBLIC. On Jazzy, tf2_ros reaches consumers through `nav2_costmap_2d_core`'s exported dependencies, and both tests link tf2_ros themselves.
+- `catkin_pkg.find_package_paths` honours `COLCON_IGNORE`, so rosdep skips the ignored folders.
+- colcon's `--packages-skip` uses the geodesy that the first call installed.
+
+### Findings
+- [ ] (must-fix) Jazzy job pins geographic_info tag `1.0.7`, whose `geodesy/include/geodesy/ecef.h` uses `std::setprecision` without `<iomanip>` (fixed upstream after the tag in f70b81a, the only commit after it). geodesy's own `src/conv/ecef_conversions.cpp` (in `geoconv`) fails at the tag: compiled here at tag 1.0.7, with `-std=gnu++17` and `-std=gnu++20`, against ROS message headers, it gives "'setprecision' is not a member of 'std'". So the first `colcon build --packages-select geodesy` will most likely fail on Jazzy. Pin the fixed commit (`git init` + `git fetch --depth 1 origin f70b81a438172cd7a066dc1b18314d70e0eb6389` + `git checkout FETCH_HEAD`), which also replaces the mutable tag with a SHA; update the step name and header comment — `.github/workflows/ci.yml:67-72`
+- [ ] (suggestion) `EXPECT_EQ(1u, node->count_subscribers("/ais_contacts"))` counts the whole ROS graph on the default domain (`ament_add_gtest` does not isolate it), so any other `/ais_contacts` subscriber on the same `ROS_DOMAIN_ID` makes it 2. Drop it (line 119's `get_topic_name()` already proves the topic) or use `ament_add_ros_isolated_gtest` — `ais_layer/test/test_initialize.cpp:120`
