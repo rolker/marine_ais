@@ -326,7 +326,7 @@ class AISParser(rclpy.node.Node):
                         )
                     except ValueError:
                         s = "Can't decode eta from:\n" + str(m)
-                        self.get_logger().warn(s)
+                        self.get_logger().warning(s)
 
                 if 'destination' in m:
                     a.voyage.destination = m['destination']

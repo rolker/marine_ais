@@ -10,7 +10,10 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
-find_package(geodesy REQUIRED)
+# 1.0.7 first has geodesy/ecef.h. The floor is necessary, not sufficient:
+# the 1.0.7 tag itself needs upstream #64 (f70b81a, still versioned 1.0.7)
+# to compile, which no version check can tell apart.
+find_package(geodesy 1.0.7 REQUIRED)
 find_package(geographic_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(marine_ais_msgs REQUIRED)
@@ -31,20 +34,26 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
-ament_target_dependencies(${PROJECT_NAME}
-  geodesy
-)
+# geodesy exports no CMake target, only include directories and the static
+# geoconv library (which defines geodesy::ECEFPoint), so use its variables.
+target_include_directories(${PROJECT_NAME} PRIVATE ${geodesy_INCLUDE_DIRS})
 
+# PUBLIC: what include/ais_layer/ais_layer.hpp uses. PRIVATE: what only
+# src/ uses; geoconv is a static archive linked into the plugin, so it stays
+# out of the exported target's link interface.
 target_link_libraries(${PROJECT_NAME}
-  ${geographic_msgs_TARGETS}
-  ${geometry_msgs_TARGETS}
-  ${marine_ais_msgs_TARGETS}
-  nav2_costmap_2d::nav2_costmap_2d_core
-  pluginlib::pluginlib
-  rclcpp::rclcpp
-  tf2::tf2
-  tf2_geometry_msgs::tf2_geometry_msgs
-  tf2_ros::tf2_ros
+  PUBLIC
+    ${geographic_msgs_TARGETS}
+    ${geometry_msgs_TARGETS}
+    ${marine_ais_msgs_TARGETS}
+    nav2_costmap_2d::nav2_costmap_2d_core
+    rclcpp::rclcpp
+  PRIVATE
+    ${geodesy_LIBRARIES}
+    pluginlib::pluginlib
+    tf2::tf2
+    tf2_geometry_msgs::tf2_geometry_msgs
+    tf2_ros::tf2_ros
 )
 
 install(
@@ -76,6 +85,21 @@ if(BUILD_TESTING)
   target_link_libraries(test_ais_layer
     ${PROJECT_NAME}
     ${marine_ais_msgs_TARGETS}
+    nav2_costmap_2d::nav2_costmap_2d_core
+    nav2_util::nav2_util_core
+    rclcpp::rclcpp
+    tf2_ros::tf2_ros
+  )
+
+  # The lifecycle node is nav2_util's on Jazzy and nav2_ros_common's on
+  # Rolling; the latter comes through nav2_costmap_2d_core, so no
+  # distro-specific package is named here. Isolated, so its graph check
+  # shares a ROS domain with as few other processes as possible; the check
+  # itself counts only the test node's own endpoints.
+  find_package(ament_cmake_ros REQUIRED)
+  ament_add_ros_isolated_gtest(test_initialize test/test_initialize.cpp)
+  target_link_libraries(test_initialize
+    ${PROJECT_NAME}
     nav2_costmap_2d::nav2_costmap_2d_core
     nav2_util::nav2_util_core
     rclcpp::rclcpp
