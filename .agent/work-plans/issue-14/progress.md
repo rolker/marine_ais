@@ -140,3 +140,51 @@ Host note for the planner, on Plan Review finding 4: rosdistro lists geographic_
 **Plan**: `.agent/work-plans/issue-14/plan.md` at `32dfa8d`
 
 Revision after the Plan Review: Jazzy job clones geographic_info 1.0.7 before rosdep and package.xml states geodesy version_gte 1.0.7; geodesy is linked via include dirs plus geoconv library; CI is two jobs with the Rolling job guarded by an if on base_ref or ref_name; the Rolling-release facts are corrected; tf2/utils.hpp on Jazzy is confirmed.
+
+## Plan Review
+**Status**: complete
+**When**: 2026-11-19 12:17 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Verdict**: ready
+
+**Issue**: #14 — Build on ROS 2 Rolling: port ais_layer and marine_ais_tools, add a rolling branch
+**Plan**: `.agent/work-plans/issue-14/plan.md` at `32dfa8d`
+**Branch**: `feature/issue-14`
+
+### Earlier findings (Plan Review of `014add3`)
+
+| # | Finding | Status in `32dfa8d` |
+|---|---|---|
+| 1 | Jazzy leg cannot build `ais_layer` with released `geodesy` 1.0.6 | Resolved. Jazzy job clones geographic_info at tag `1.0.7` before rosdep; header comment says why and when to drop it; `version_gte` added. Checked: tag `1.0.7` exists upstream (`git ls-remote` gives 6ad4ef3, on `origin/ros2`), contains `geodesy/include/geodesy/ecef.h`, and has 491eff4 (ECEF support) as an ancestor. |
+| 2 | Link `geoconv`; drop include-only trial | Resolved. Step 5 uses `${geodesy_INCLUDE_DIRS}` and `${geodesy_LIBRARIES}`, no trial, with a symbol check. (See new finding 3 on PUBLIC vs PRIVATE.) |
+| 3 | Job `if` cannot read `matrix` | Resolved. Two jobs; `rolling` job has `if: (github.base_ref \|\| github.ref_name) != 'jazzy'`. Checked: on `pull_request` `base_ref` is the target branch; on `push` it is empty, so `ref_name` is used. PR or push to `jazzy` skips the job; PR or push to `rolling` runs it. Cherry-picked unchanged onto `jazzy` it runs only the `jazzy` job. |
+| 4 | Rolling does have a `geodesy` release; rosdep from selected paths | Resolved. Wording corrected; Rolling job's rosdep names only the two package paths. Checked locally: `ros-rolling-tf-transformations`, `ros-rolling-nmea-msgs`, `ros-rolling-geographic-msgs` all have resolute candidates, so the Rolling job's keys should resolve. |
+| 5 | `tf2/utils.hpp` on Jazzy confirmed | Resolved. Step 4 and Context state it as confirmed. |
+
+### Evaluation
+
+| Dimension | Verdict | Notes |
+|---|---|---|
+| Scope | Good | One PR to `rolling`, about 6 to 8 commits, CI commit standalone; backport outside the loop as the owner fixed. |
+| Issue alignment | Good | Serves: "None (project has no written goals); no project design document. Part of rolker/unh_marine_autonomy#415." All four Issue Review actions and option B carried; Rolling `ais_layer` gap stated in workflow header and PR text. |
+| File targeting | Good | Right files; `ais_layer/package.xml` added for the version floor. |
+| Consequences | Good | geodesy >= 1.0.7 consequence (package.xml, Jazzy clone, header, drop-clone follow-up) captured. |
+| Principle alignment | Good | Jazzy claims limited to CI; Rolling `ais_layer` hand check named. Step 6's stated benefit is overstated (finding 1). |
+| ADR compliance | Good | 0002, 0013, 0019 addressed. |
+| ROS conventions | Good | geodesy include/library form is right and distro-neutral (1.0.7 `geodesy/CMakeLists.txt`: `add_library(geoconv STATIC ...)`, `ament_export_libraries(geoconv)`, no exported target). Minor visibility point (finding 3). |
+
+### Findings
+
+1. **[Principle alignment / ROS conventions] (low)** — Step 6 says `version_gte="1.0.7"` makes "rosdep/colcon surface it". Neither does: rosdep resolves keys by name only (no version handling in `rosdep2`), and colcon-ros records `version_gte` as dependency metadata without enforcing it. So the attribute is safe on Jazzy (rosdep resolves `geodesy` to the released package where no source is present, and `--ignore-src` skips it in CI), but its effect is documentation plus bloom's Debian `Depends: ros-jazzy-geodesy (>= 1.0.7)` if the package is ever released. Step 6's "check that colcon and rosdep accept the attribute" will pass trivially and the third Open Question can be closed; correct the rationale so it does not claim a check that does not exist (the real signal on a 1.0.6 machine is the missing `geodesy/ecef.h` compile error).
+2. **[Consequences / CI design] (low)** — Cloning geographic_info at `1.0.7` puts three more packages in `src/` (`geographic_info`, `geographic_msgs`, `geodesy`). Make the Jazzy job's colcon scope explicit so this repo's check does not run geodesy's own tests and linters: e.g. `colcon build --packages-up-to ais_layer marine_ais_tools` and `colcon test --packages-select marine_ais_msgs marine_ais_tools ais_layer` (and `colcon test-result` over those). The source `geographic_msgs` 1.0.7 overlays the released 1.0.6; harmless, since between tags `1.0.6` and `1.0.7` it changes only `CHANGELOG.rst` and `package.xml`. A shallow clone (`--depth 1 --branch 1.0.7`) keeps it cheap.
+3. **[ROS conventions] (low)** — Step 5 adds `${geodesy_INCLUDE_DIRS}` as `PUBLIC`. `geodesy` is used only in `src/ais_layer.cpp`; no header under `ais_layer/include` includes it. `PUBLIC` exports that absolute include path in `ais_layer`'s exported target for no consumer's benefit; use `PRIVATE`. Keep `${geodesy_LIBRARIES}` in the existing plain-signature `target_link_libraries` call (adding a keyword there would mix signatures on one target, which CMake rejects).
+
+### Summary
+
+The revision resolves all five earlier findings, and the pinned tag, the geodesy export shape and the `jazzy` guard check out against the sources. The three new points are low-severity wording and scoping corrections that can be taken during implementation. Ready.
+
+### Recommended Actions
+
+- [ ] Step 6: reword the `version_gte` rationale (documentation and bloom Depends; not enforced by rosdep or colcon); close the third Open Question.
+- [ ] Step 8: scope the Jazzy job's colcon build/test to this repo's packages; consider a shallow clone.
+- [ ] Step 5: make `${geodesy_INCLUDE_DIRS}` `PRIVATE`.
