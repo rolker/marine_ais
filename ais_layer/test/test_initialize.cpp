@@ -6,6 +6,7 @@
 // package is built for, not only compiled.
 
 #include <gtest/gtest.h>
+#include <unistd.h>
 
 #include <memory>
 #include <string>
@@ -51,7 +52,9 @@ protected:
   {
     rclcpp::NodeOptions options;
     options.parameter_overrides(overrides);
-    return std::make_shared<TestLifecycleNode>("ais_layer_initialize_test", "", options);
+    // The process id keeps the name unique in a shared ROS domain.
+    return std::make_shared<TestLifecycleNode>(
+      "ais_layer_initialize_test_" + std::to_string(getpid()), "", options);
   }
 
   /// Calls initialize() as Nav2's costmap does, with no callback group.
@@ -117,9 +120,20 @@ TEST_F(InitializeTest, SubscribesOnTheConfiguredTopic)
 
   ASSERT_NE(nullptr, layer.contact_subscriber_);
   EXPECT_STREQ("/ais_contacts", layer.contact_subscriber_->get_topic_name());
-  // The test runs in its own ROS domain (ament_add_ros_isolated_gtest), so
-  // this counts only the layer's subscription.
-  EXPECT_EQ(1u, node->count_subscribers("/ais_contacts"));
+  // The middleware's graph lists exactly one AISContact subscription on the
+  // topic from this test's node: the layer's. Endpoints of other processes
+  // in the same ROS domain (ROS_DOMAIN_ID may be set on a developer's or a
+  // robot's machine) carry other node names and are not counted.
+  size_t own_endpoints = 0;
+  for (const auto & info : node->get_subscriptions_info_by_topic("/ais_contacts")) {
+    if (info.node_name() == node->get_name() &&
+      info.node_namespace() == node->get_namespace() &&
+      info.topic_type() == "marine_ais_msgs/msg/AISContact")
+    {
+      ++own_endpoints;
+    }
+  }
+  EXPECT_EQ(1u, own_endpoints);
 }
 
 TEST_F(InitializeTest, SubscribesOnTheDefaultTopicWithoutOverride)
