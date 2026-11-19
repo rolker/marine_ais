@@ -1,0 +1,180 @@
+# CI for marine_ais. The same file is carried on the rolling and jazzy
+# branches; pushes and pull requests to either run it.
+#
+# Job "jazzy" (always runs) builds and tests all three packages
+# (marine_ais_msgs, marine_ais_tools, ais_layer) on Jazzy, so the shared code
+# keeps building there for the jazzy branch and for backports to it.
+# ais_layer includes geodesy/ecef.h, which geographic_info first released in
+# 1.0.7; the Jazzy release of geodesy is 1.0.6 and lacks it. So this job
+# clones geographic_info at commit f70b81a, which is tag 1.0.7 plus the one
+# upstream fix after it ("Adding missing include for setprecision", #64):
+# at the tag, ecef.h uses std::setprecision without <iomanip> and geodesy's
+# own ecef_conversions.cpp does not compile. The commit is pinned by SHA,
+# not by a branch or a mutable tag. The job builds geodesy
+# only from the clone: COLCON_IGNORE in the clone's geographic_msgs and
+# geographic_info folders hides them from rosdep and colcon, so rosdep's
+# --ignore-src skips only geodesy and installs the released geographic_msgs
+# (which nav2_msgs needs on Jazzy anyway; 1.0.6 and 1.0.7 differ only in
+# version and changelog). geodesy is built without its tests. Drop the
+# clone once Jazzy has a geographic_info release that includes #64 (the
+# first release after 1.0.7).
+#
+# Job "rolling" builds and tests marine_ais_msgs and marine_ais_tools only.
+# It does not build ais_layer: navigation2 (nav2_costmap_2d, nav2_util) has
+# no Rolling release. ais_layer on Rolling is therefore not covered by CI and
+# is checked by hand on a development machine with navigation2 built from
+# source. Building navigation2 from source in this job (option A in #14) is
+# the follow-up if it proves cheap. The job is skipped for pull requests to
+# and pushes on jazzy (github.base_ref is the target branch of a pull
+# request; github.ref_name is the pushed branch), so on the jazzy branch this
+# file runs the jazzy job only.
+
+name: CI
+
+on:
+  push:
+    branches: [rolling, jazzy]
+  pull_request:
+    branches: [rolling, jazzy]
+
+jobs:
+  jazzy:
+    name: build-and-test (jazzy)
+    # The container supplies the distro's OS; the host runner only runs it.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    container:
+      image: ros:jazzy-ros-core
+
+    steps:
+      - name: Update apt
+        run: apt-get update
+
+      - name: Install ros dev tools
+        run: DEBIAN_FRONTEND=noninteractive apt-get -y install ros-dev-tools git
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Init rosdep
+        run: |
+          if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+            rosdep init
+          fi
+
+      - name: Update rosdep
+        run: rosdep update
+
+      - name: Create workspace
+        run: mkdir -p ../ws/src && ln -s "$GITHUB_WORKSPACE" ../ws/src/marine_ais
+
+      - name: Clone geographic_info at f70b81a (1.0.7 plus the iomanip fix)
+        working-directory: ../ws
+        run: |
+          git init src/geographic_info
+          cd src/geographic_info
+          git remote add origin https://github.com/ros-geographic-info/geographic_info.git
+          git fetch --depth 1 origin f70b81a438172cd7a066dc1b18314d70e0eb6389
+          git checkout FETCH_HEAD
+
+      - name: Build only geodesy from the clone
+        working-directory: ../ws/src/geographic_info
+        run: touch geographic_msgs/COLCON_IGNORE geographic_info/COLCON_IGNORE
+
+      - name: Install ROS dependencies
+        working-directory: ../ws
+        run: >
+          DEBIAN_FRONTEND=noninteractive
+          rosdep install --from-paths src --ignore-src -y
+
+      - name: Build
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon build --packages-select geodesy
+          --cmake-args -DBUILD_TESTING=OFF &&
+          colcon build --packages-up-to marine_ais_msgs marine_ais_tools ais_layer
+          --packages-skip geodesy
+          --cmake-args -DBUILD_TESTING=ON'
+
+      - name: Test
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          source install/setup.bash &&
+          colcon test --packages-select marine_ais_msgs marine_ais_tools ais_layer
+          --event-handlers console_direct+
+          --return-code-on-test-failure'
+
+      # Only the three packages above were tested, so only their results exist.
+      - name: Test results
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon test-result --verbose'
+        if: always()
+
+  rolling:
+    name: build-and-test (rolling, without ais_layer)
+    if: (github.base_ref || github.ref_name) != 'jazzy'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    container:
+      image: ros:rolling-ros-core
+
+    steps:
+      - name: Update apt
+        run: apt-get update
+
+      - name: Install ros dev tools
+        run: DEBIAN_FRONTEND=noninteractive apt-get -y install ros-dev-tools
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Init rosdep
+        run: |
+          if [ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+            rosdep init
+          fi
+
+      - name: Update rosdep
+        run: rosdep update
+
+      - name: Create workspace
+        run: mkdir -p ../ws/src && ln -s "$GITHUB_WORKSPACE" ../ws/src/marine_ais
+
+      # Only the two packages' paths, so rosdep does not ask for the
+      # navigation2 keys of ais_layer.
+      - name: Install ROS dependencies
+        working-directory: ../ws
+        run: >
+          DEBIAN_FRONTEND=noninteractive
+          rosdep install --from-paths
+          src/marine_ais/marine_ais_msgs src/marine_ais/marine_ais_tools
+          --ignore-src -y
+
+      - name: Build
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/rolling/setup.bash &&
+          colcon build --packages-up-to marine_ais_msgs marine_ais_tools
+          --cmake-args -DBUILD_TESTING=ON'
+
+      - name: Test
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/rolling/setup.bash &&
+          source install/setup.bash &&
+          colcon test --packages-select marine_ais_msgs marine_ais_tools
+          --event-handlers console_direct+
+          --return-code-on-test-failure'
+
+      - name: Test results
+        working-directory: ../ws
+        run: >
+          bash -c 'source /opt/ros/rolling/setup.bash &&
+          colcon test-result --verbose'
+        if: always()

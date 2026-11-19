@@ -17,7 +17,7 @@
 #include "marine_ais_msgs/msg/navigational_status.hpp"
 #include "nav2_costmap_2d/cost_values.hpp"
 #include "pluginlib/class_list_macros.hpp"
-#include "tf2/utils.h"
+#include "tf2/utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 PLUGINLIB_EXPORT_CLASS(ais_layer::AISLayer, nav2_costmap_2d::Layer)
@@ -238,6 +238,17 @@ void AISLayer::onInitialize()
   global_frame_id_ = layered_costmap_->getGlobalFrameID();
   matchSize();
 
+  // Declare "<layer name>.<param>" on the owning node unless it already is.
+  // Plain rclcpp: Nav2 on Rolling removed Layer::declareParameter, and this
+  // does what Jazzy's version did, so the same code builds on both.
+  auto declareParameter =
+    [&node, this](const std::string & param, const rclcpp::ParameterValue & value) {
+      const std::string full_name = getFullName(param);
+      if (!node->has_parameter(full_name)) {
+        node->declare_parameter(full_name, value);
+      }
+    };
+
   declareParameter("enabled", rclcpp::ParameterValue(true));
   node->get_parameter(name_ + ".enabled", enabled_);
 
@@ -403,8 +414,10 @@ void AISLayer::onInitialize()
   contact_cost_ = static_cast<unsigned char>(contact_cost);
   envelope_edge_cost_ = static_cast<unsigned char>(envelope_edge_cost);
 
-  contact_subscriber_ = node->create_subscription<marine_ais_msgs::msg::AISContact>(
-    topic_, rclcpp::QoS(50),
+  // rclcpp's free function, not the node's member: Nav2 on Rolling wraps the
+  // member with a (topic, callback, qos) signature that Jazzy does not have.
+  contact_subscriber_ = rclcpp::create_subscription<marine_ais_msgs::msg::AISContact>(
+    node, topic_, rclcpp::QoS(50),
     std::bind(&AISLayer::contactCallback, this, std::placeholders::_1));
 
   parameter_callback_ = node->add_on_set_parameters_callback(
