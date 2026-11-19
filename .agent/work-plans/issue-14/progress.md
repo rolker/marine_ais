@@ -385,3 +385,13 @@ Asked "Publish now, or fix F1 first?" with the round 3 verdict (approved, 0 must
 - [ ] (suggestion, Local Review (Pre-Push) @ `9419442`) The isolated runner picks a free domain only when `ROS_DOMAIN_ID` is unset; with it set (common on robot and dev machines) the test uses that domain, so another `/ais_contacts` subscriber there still makes `count_subscribers` 2, and the comment "counts only the layer's subscription" overstates it. CI is unaffected. Drop the assertion (line 120's `get_topic_name()` already proves the topic) or narrow the comment — `ais_layer/test/test_initialize.cpp:120-122`
 
 ### False positives
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-19 14:05 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: owner
+**After**: findings
+**Decision**: address
+
+Not asked again: the owner gave this answer in advance at the publish checkpoint above, in his words "Publish, fix F1 with CI's results (Recommended)", where F1 is the one open finding of the Integrated Review (`ais_layer/test/test_initialize.cpp:120-122`, the `count_subscribers` assertion when `ROS_DOMAIN_ID` is set), and the option's stated meaning was that it "is fixed in the same round as whatever CI turns up, before the merge question". CI on pull request #15 turned up nothing (both jobs passed at dcb5905), so the round addresses that finding alone.
