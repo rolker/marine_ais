@@ -31,11 +31,12 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 
-ament_target_dependencies(${PROJECT_NAME}
-  geodesy
-)
+# geodesy exports no CMake target, only include directories and the static
+# geoconv library (which defines geodesy::ECEFPoint), so use its variables.
+target_include_directories(${PROJECT_NAME} PRIVATE ${geodesy_INCLUDE_DIRS})
 
 target_link_libraries(${PROJECT_NAME}
+  ${geodesy_LIBRARIES}
   ${geographic_msgs_TARGETS}
   ${geometry_msgs_TARGETS}
   ${marine_ais_msgs_TARGETS}
