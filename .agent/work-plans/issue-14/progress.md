@@ -360,3 +360,13 @@ Both round-2 boxes are addressed (9d4f924, 8ae3f2f, 97e9311). Checked:
 
 ### Findings
 - [ ] (suggestion) The isolated runner picks a free domain only when `ROS_DOMAIN_ID` is unset; with it set (common on robot and dev machines) the test uses that domain, so another `/ais_contacts` subscriber there still makes `count_subscribers` 2, and the comment "counts only the layer's subscription" overstates it. CI is unaffected. Drop the assertion (line 120's `get_topic_name()` already proves the topic) or narrow the comment — `ais_layer/test/test_initialize.cpp:120-122`
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-19 14:01 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: owner
+**After**: publish
+**Decision**: publish
+
+Asked "Publish now, or fix F1 first?" with the round 3 verdict (approved, 0 must-fix, 1 suggestion), what was verified on Rolling, that nothing has run on Jazzy and the workflow has never run, and the open suggestion quoted (F1: `test_initialize.cpp:120-122`, the `count_subscribers` assertion when `ROS_DOMAIN_ID` is set). The owner answered: "Publish, fix F1 with CI's results (Recommended)". The suggestion stays open and is to be fixed in the same round as whatever the pull request's CI turns up, before the merge question.
