@@ -6,10 +6,13 @@
 # keeps building there for the jazzy branch and for backports to it.
 # ais_layer includes geodesy/ecef.h, which geographic_info first released in
 # 1.0.7; the Jazzy release of geodesy is 1.0.6 and lacks it. So this job
-# clones geographic_info at tag 1.0.7 into the workspace before rosdep
-# (--ignore-src then skips geodesy and geographic_msgs) and builds only what
-# this repository's packages need from it. Drop the clone once Jazzy has a
-# geographic_info release of 1.0.7 or later.
+# clones geographic_info at tag 1.0.7 into the workspace and builds geodesy
+# only from it: COLCON_IGNORE in the clone's geographic_msgs and
+# geographic_info folders hides them from rosdep and colcon, so rosdep's
+# --ignore-src skips only geodesy and installs the released geographic_msgs
+# (which nav2_msgs needs on Jazzy anyway; 1.0.6 and 1.0.7 differ only in
+# version and changelog). geodesy is built without its tests. Drop the
+# clone once Jazzy has a geographic_info release of 1.0.7 or later.
 #
 # Job "rolling" builds and tests marine_ais_msgs and marine_ais_tools only.
 # It does not build ais_layer: navigation2 (nav2_costmap_2d, nav2_util) has
@@ -68,6 +71,10 @@ jobs:
           https://github.com/ros-geographic-info/geographic_info.git
           src/geographic_info
 
+      - name: Build only geodesy from the clone
+        working-directory: ../ws/src/geographic_info
+        run: touch geographic_msgs/COLCON_IGNORE geographic_info/COLCON_IGNORE
+
       - name: Install ROS dependencies
         working-directory: ../ws
         run: >
@@ -78,7 +85,10 @@ jobs:
         working-directory: ../ws
         run: >
           bash -c 'source /opt/ros/jazzy/setup.bash &&
+          colcon build --packages-select geodesy
+          --cmake-args -DBUILD_TESTING=OFF &&
           colcon build --packages-up-to marine_ais_msgs marine_ais_tools ais_layer
+          --packages-skip geodesy
           --cmake-args -DBUILD_TESTING=ON'
 
       - name: Test
