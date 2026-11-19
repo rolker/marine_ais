@@ -382,7 +382,7 @@ Asked "Publish now, or fix F1 first?" with the round 3 verdict (approved, 0 must
 **CI**: all-pass
 
 ### Findings
-- [ ] (suggestion, Local Review (Pre-Push) @ `9419442`) The isolated runner picks a free domain only when `ROS_DOMAIN_ID` is unset; with it set (common on robot and dev machines) the test uses that domain, so another `/ais_contacts` subscriber there still makes `count_subscribers` 2, and the comment "counts only the layer's subscription" overstates it. CI is unaffected. Drop the assertion (line 120's `get_topic_name()` already proves the topic) or narrow the comment — `ais_layer/test/test_initialize.cpp:120-122`
+- [x] (suggestion, Local Review (Pre-Push) @ `9419442`) The isolated runner picks a free domain only when `ROS_DOMAIN_ID` is unset; with it set (common on robot and dev machines) the test uses that domain, so another `/ais_contacts` subscriber there still makes `count_subscribers` 2, and the comment "counts only the layer's subscription" overstates it. CI is unaffected. Drop the assertion (line 120's `get_topic_name()` already proves the topic) or narrow the comment — `ais_layer/test/test_initialize.cpp:120-122`
 
 ### False positives
 
