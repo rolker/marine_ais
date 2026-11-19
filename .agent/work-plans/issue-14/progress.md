@@ -253,3 +253,39 @@ Checked for the two unplanned commits: a64e56e's helper matches Jazzy's `Layer::
 **Decision**: address
 
 Asked "Publish now, or take the suggestions first?" with the pre-push review's verdict (round 1 approved, 0 must-fix, 5 suggestions) and the five suggestions quoted. The owner answered: "Address all five first (Recommended)". All five suggestions of the Local Review (Pre-Push) above are to be addressed before the branch is pushed.
+
+## Implementation
+**Status**: complete
+**When**: 2026-11-19 13:00 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+
+**Branch**: feature/issue-14 at `4c4bd16`
+**Addressed**: Local Review (Pre-Push) at `f068f9d` (2026-11-19 12:51 -05:00)
+**Commits**: `60177d0`, `1c99696` (CI); `ffb596c`, `0668537`, `3a6fdca` (code); `4c4bd16` (box checks)
+
+### Actions
+- [x] Jazzy job builds only geodesy from the clone: `COLCON_IGNORE` in `geographic_msgs` and `geographic_info`, geodesy built first with `-DBUILD_TESTING=OFF`, then the three packages with `--packages-skip geodesy`; header comment corrected (rosdep installs the released geographic_msgs; 1.0.6..1.0.7 of geographic_msgs differs only in version and changelog, checked with `git diff --stat 1.0.6 1.0.7`) — `.github/workflows/ci.yml` (`60177d0`). Checked locally: catkin_pkg's `find_package_paths` honours `COLCON_IGNORE`; `colcon list` on a scratch workspace with the 1.0.7 clone lists only geodesy, ais_layer, marine_ais_msgs, marine_ais_tools.
+- [x] `-r` dropped from both `rosdep install` steps — `.github/workflows/ci.yml` (`1c99696`). Every key resolved: Jazzy job (all `package.xml` under `src`, geodesy 1.0.7's included, `rosdep resolve --rosdistro jazzy --os ubuntu:noble`), 28 keys, all to `ros-jazzy-*` or `python3-catkin-pkg`/`python3-pyproj`/`python3-pytest`/`python3-serial`, `tf_transformations -> ros-jazzy-tf-transformations`; `rosdep install --simulate ... --rosdistro jazzy --os ubuntu:noble` exit 0. Rolling job (msgs + tools), 14 keys, all resolve for `ubuntu:resolute` (`tf_transformations -> ros-rolling-tf-transformations`); none of the ROS keys resolve for `ubuntu:noble` on Rolling.
+- [x] `find_package(geodesy 1.0.7 REQUIRED)` — `ais_layer/CMakeLists.txt:13` (`ffb596c`). Underlay geodesy's `geodesyConfig-version.cmake` says 1.0.7; a scratch CMake project found it for 1.0.7 and did not for 1.0.8.
+- [x] Keyword `target_link_libraries`: PUBLIC geographic_msgs, geometry_msgs, marine_ais_msgs, nav2_costmap_2d_core, rclcpp (included by `include/ais_layer/ais_layer.hpp`); PRIVATE `${geodesy_LIBRARIES}`, pluginlib, tf2, tf2_geometry_msgs, tf2_ros (src only; the header names tf2 only in a comment) — `ais_layer/CMakeLists.txt` (`0668537`). Installed `export_ais_layerExport.cmake`: no `geoconv` (grep count 0); `ldd -r libais_layer.so`: 0 undefined/not found; `geodesy::ECEFPoint::ECEFPoint(GeoPoint const&)` defined (`T`) in the plugin; gtests link.
+- [x] New `ais_layer/test/test_initialize.cpp` (`3a6fdca`): five tests on a lifecycle node with overrides (overrides read; `ais.enabled` declared false before `initialize()` stays false; second `initialize()` does not throw; subscription `/ais_contacts` with `count_subscribers == 1`; default topic `/contacts`). A mutation run (helper declaring unconditionally) failed the pre-declared and second-initialize tests, then was reverted. No new `find_package`/`test_depend`: it links ais_layer, nav2_costmap_2d_core, nav2_util_core, rclcpp, tf2_ros, all already present; `nav2_ros_common` reaches the test on Rolling through nav2_costmap_2d_core and is not named, because it has no Jazzy package and rosdep without `-r` would fail on it.
+
+### Jazzy signatures checked (navigation2 `origin/jazzy` at `c7046550`, by `git show`)
+- `Layer::initialize(LayeredCostmap *, std::string, tf2_ros::Buffer *, const nav2_util::LifecycleNode::WeakPtr &, rclcpp::CallbackGroup::SharedPtr)` (layer.hpp:73, layer.cpp body identical to main's: sets members, locks the node for logger and clock, calls `onInitialize()`).
+- `nav2_util::LifecycleNode` defines no `WeakPtr` of its own, so `WeakPtr` is `std::weak_ptr<rclcpp_lifecycle::LifecycleNode>`; the test passes `std::shared_ptr<nav2_util::LifecycleNode>`, an implicit derived-to-base conversion.
+- `nav2_util::LifecycleNode(const std::string &, const std::string & ns = "", const rclcpp::NodeOptions & = {})`; the test calls `(name, "", options)`, valid on both. Its constructor declares only bond/autostart parameters.
+- `LayeredCostmap(std::string global_frame, bool rolling_window, bool track_unknown)`, same on both.
+- Jazzy `layer.hpp` includes `tf2_ros/buffer.h` and `nav2_util/lifecycle_node.hpp`; the test includes no tf2_ros header itself; `nav2_ros_common/lifecycle_node.hpp` does not exist on Jazzy, so `__has_include` picks `nav2_util`.
+
+### Checks (Rolling, clean build: `core_ws/build`, `install`, `log` removed)
+- build.sh: "Summary: 3 packages finished [17.6s]".
+- test.sh exit 0: `test_ais_layer` "[  PASSED  ] 35 tests.", `test_initialize` "[  PASSED  ] 5 tests.", `test_plugin_loading` "[  PASSED  ] 1 test.", ais_layer "100% tests passed, 0 tests failed out of 8", marine_ais_tools "27 passed", marine_ais_msgs "100% tests passed, 0 tests failed out of 3".
+- `colcon test-result --verbose`: "Summary: 99 tests, 0 errors, 0 failures, 5 skipped" (all 5 are cppcheck's per-file skips).
+- `ais_layer.cpp` compiled `-fsyntax-only` against the geodesy 1.0.7 tag's headers (the CI clone): rc 0. The tag's `ecef.h` lacks `#include <iomanip>` (added after the tag in f70b81a); it compiles here through transitive includes.
+
+### Not verified (no Jazzy, no Docker, workflow not run)
+- The Jazzy build of `test_initialize.cpp` and of the CMake changes; the signatures above were read, not compiled.
+- That the `ros:rolling-ros-core` image is Ubuntu resolute (Rolling's keys resolve only there); that `--packages-skip geodesy` in the second colcon call picks up the geodesy installed by the first in the CI container (colcon's normal behaviour); that the 1.0.7 tag's `ecef.h` compiles in ais_layer under Noble's GCC 13 without `<iomanip>`.
+- `count_subscribers` relies on the RMW updating the local graph synchronously (true for the default Fast DDS here).
+
+Full pre-commit pass left to the host.
