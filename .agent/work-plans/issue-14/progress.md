@@ -222,3 +222,24 @@ CI commit: `88038f4` `.github/workflows/ci.yml`, two jobs: `jazzy` (shallow clon
 Final clean build and test on Rolling (underlay at /home/roland/project11/rolling/underlay): build "Summary: 3 packages finished"; `test_ais_layer` "[  PASSED  ] 35 tests.", `test_plugin_loading` "[  PASSED  ] 1 test.", ais_layer linters "100% tests passed, 0 tests failed out of 7", marine_ais_tools "27 passed", marine_ais_msgs "100% tests passed, 0 tests failed out of 3"; `colcon test-result --verbose`: "Summary: 90 tests, 0 errors, 0 failures, 4 skipped" (the 4 skipped are ament_cppcheck's own skips in ais_layer). `ldd -r libais_layer.so`: 0 undefined symbols; `geodesy::ECEFPoint::ECEFPoint(GeoPoint)` is defined in the library (geoconv linked statically).
 
 Not checked: Jazzy (not installed, no Docker), so the Jazzy forms of the code fixes and the workflow are shown only by CI on the PR. The workflow was not run; YAML parsed and read against marine_control's working file (no actionlint/yamllint installed). The tests do not call `onInitialize`, so the two Nav2 API fixes are shown by compilation only, not exercised at runtime. Left as is: `marine_ais_msgs` CMake deprecation warning (`cmake_minimum_required(VERSION 3.8)`, below 3.10) and an unused `tf_transformations` depend in marine_ais_tools/package.xml.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-11-19 12:51 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Verdict**: approved
+
+**Branch**: feature/issue-14 at `f068f9d`
+**Base**: origin/rolling
+**Depth**: Standard (reason: adds `.github/workflows/ci.yml`)
+**Must-fix**: 0 | **Suggestions**: 5
+**Round**: 1 | **Ship**: recommended — no must-fix findings; remaining suggestions can be applied or tracked
+
+Checked for the two unplanned commits: a64e56e's helper matches Jazzy's `Layer::declareParameter` (navigation2 `origin/jazzy`: `declare_parameter_if_not_declared(node, getFullName(p), value)`; the only other effect, `local_params_`, is never read). 0e3a7cc's free `rclcpp::create_subscription(node, ...)` is what Jazzy's `rclcpp_lifecycle::LifecycleNode::create_subscription` calls, with default options and the node's default callback group, as before; it bypasses Rolling Nav2's wrapper, so no `qos_overrides.*` parameters, which matches Jazzy. A scratch program on Rolling (outside the repo, deleted) loaded the plugin, called `initialize` twice on a `nav2::LifecycleNode` with overrides and a pre-declared `ais.enabled=false`: overrides read, pre-declared value kept, no re-declare throw, subscription on the overridden topic with depth 50, reliable, volatile, no QoS override parameters.
+
+### Findings
+- [ ] (suggestion) Jazzy job: the clone also builds `geographic_msgs` (and geodesy's unused gtests); `nav2_msgs` on Jazzy depends on `geographic_msgs`, so the binary is installed anyway and the header's "--ignore-src then skips ... geographic_msgs" is wrong. Build only geodesy from the clone (`COLCON_IGNORE` in `geographic_msgs` and `geographic_info`) and correct the comment — `.github/workflows/ci.yml:9-10,64-69`
+- [ ] (suggestion) Drop `-r` from both `rosdep install` steps: with it rosdep returns 0 when a key cannot be resolved (rosdep2/main.py), so a missing dependency shows up later as a build or import error — `.github/workflows/ci.yml:75,140`
+- [ ] (suggestion) `find_package(geodesy 1.0.7 REQUIRED)`: ament's version file accepts >= 1.0.7, so a 1.0.6 geodesy fails at configure with a clear message instead of a missing `geodesy/ecef.h` — `ais_layer/CMakeLists.txt:13`
+- [ ] (suggestion) Plain `target_link_libraries` puts the absolute path of `libgeoconv.a` in the exported target's link interface; use the keyword form with `${geodesy_LIBRARIES}` PRIVATE (the archive is already inside the plugin) — `ais_layer/CMakeLists.txt:38-39`
+- [ ] (suggestion) Add a gtest that calls `initialize()` (LayeredCostmap, tf2_ros::Buffer, lifecycle node with parameter overrides; node type via `#if __has_include("nav2_ros_common/lifecycle_node.hpp")`: `nav2::LifecycleNode` vs `nav2_util::LifecycleNode`) and asserts parameters and the subscription, so the Jazzy CI job exercises a64e56e and 0e3a7cc, not only compiles them — `ais_layer/test/test_ais_layer.cpp`
