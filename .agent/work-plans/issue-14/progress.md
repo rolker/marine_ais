@@ -120,3 +120,15 @@ The fix list and commit structure are sound and the review-issue actions are car
 - [ ] Step 7: implement the `jazzy` guard as two jobs or an expression-computed matrix, not a job `if` on the matrix job.
 - [ ] Correct the "geodesy has no Rolling release" wording; restrict the Rolling leg's rosdep to the selected package paths.
 - [ ] Step 4: mark `tf2/utils.hpp` on Jazzy as confirmed (geometry2 #723).
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-19 12:14 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: owner
+**After**: plan
+**Decision**: revise
+
+Asked "How should the plan go forward?" with the Plan Review's verdict (needs-work) and its findings 1 to 5 quoted. The owner answered: "Revise (Recommended)".
+
+Host note for the planner, on Plan Review finding 4: rosdistro lists geographic_info 1.0.7-4 for Rolling, but on the development machine (Ubuntu 26.04, resolute) `apt-cache policy ros-rolling-geodesy` shows no candidate while `ros-rolling-geographic-msgs` has one, and `rosdep resolve geodesy` names `ros-rolling-geodesy`. So whether the Rolling CI container can install `geodesy` depends on its Ubuntu release; the Rolling leg does not build `ais_layer`, so it need not. The project's underlay layer (navigation2, grid_map, geographic_info from source) is now built at /home/roland/project11/rolling/underlay.
