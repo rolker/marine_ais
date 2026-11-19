@@ -463,3 +463,13 @@ Both CI jobs passed at `cf2236a`: build-and-test (jazzy) and build-and-test (rol
 None.
 
 ### False positives
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-19 14:27 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: owner
+**After**: merge
+**Decision**: merge
+
+Asked "Merge PR #15 into `rolling`?" with: CI at head cf2236a (`build-and-test (jazzy)` pass, `build-and-test (rolling, without ais_layer)` pass), the review history (three pre-push rounds and a PR re-review, no open findings), the gap by design (`ais_layer` on Rolling is checked locally only), and that the merge is into `rolling`, so issue #14 stays open for the `jazzy` backport, which the host then does by hand (cherry-pick of the code and CI commits, a pull request to `jazzy` saying `Closes #14`, its merge asked separately). The owner answered: "Merge (Recommended)".
