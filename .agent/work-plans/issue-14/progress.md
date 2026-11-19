@@ -132,3 +132,11 @@ The fix list and commit structure are sound and the review-issue actions are car
 Asked "How should the plan go forward?" with the Plan Review's verdict (needs-work) and its findings 1 to 5 quoted. The owner answered: "Revise (Recommended)".
 
 Host note for the planner, on Plan Review finding 4: rosdistro lists geographic_info 1.0.7-4 for Rolling, but on the development machine (Ubuntu 26.04, resolute) `apt-cache policy ros-rolling-geodesy` shows no candidate while `ros-rolling-geographic-msgs` has one, and `rosdep resolve geodesy` names `ros-rolling-geodesy`. So whether the Rolling CI container can install `geodesy` depends on its Ubuntu release; the Rolling leg does not build `ais_layer`, so it need not. The project's underlay layer (navigation2, grid_map, geographic_info from source) is now built at /home/roland/project11/rolling/underlay.
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-11-19 12:15 -05:00
+**By**: Claude Code Agent (claude-sonnet-5-5)
+**Plan**: `.agent/work-plans/issue-14/plan.md` at `32dfa8d`
+
+Revision after the Plan Review: Jazzy job clones geographic_info 1.0.7 before rosdep and package.xml states geodesy version_gte 1.0.7; geodesy is linked via include dirs plus geoconv library; CI is two jobs with the Rolling job guarded by an if on base_ref or ref_name; the Rolling-release facts are corrected; tf2/utils.hpp on Jazzy is confirmed.
