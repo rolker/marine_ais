@@ -188,3 +188,13 @@ The revision resolves all five earlier findings, and the pinned tag, the geodesy
 - [ ] Step 6: reword the `version_gte` rationale (documentation and bloom Depends; not enforced by rosdep or colcon); close the third Open Question.
 - [ ] Step 8: scope the Jazzy job's colcon build/test to this repo's packages; consider a shallow clone.
 - [ ] Step 5: make `${geodesy_INCLUDE_DIRS}` `PRIVATE`.
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-19 12:39 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: owner
+**After**: plan
+**Decision**: proceed
+
+Asked "Implement this plan, with F1 to F3 handed to the implementer as corrections?" with the revised plan (32dfa8d) summarised and the second Plan Review's three low findings quoted (F1: the `version_gte` rationale claims a check that does not exist; F2: make the Jazzy job's colcon scope explicit and clone geographic_info shallow; F3: `${geodesy_INCLUDE_DIRS}` is PRIVATE, `${geodesy_LIBRARIES}` stays in the plain-signature `target_link_libraries` call). The owner answered: "Proceed (Recommended)". The three findings are corrections to the plan for the implementer.
