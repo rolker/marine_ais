@@ -243,3 +243,13 @@ Checked for the two unplanned commits: a64e56e's helper matches Jazzy's `Layer::
 - [ ] (suggestion) `find_package(geodesy 1.0.7 REQUIRED)`: ament's version file accepts >= 1.0.7, so a 1.0.6 geodesy fails at configure with a clear message instead of a missing `geodesy/ecef.h` — `ais_layer/CMakeLists.txt:13`
 - [ ] (suggestion) Plain `target_link_libraries` puts the absolute path of `libgeoconv.a` in the exported target's link interface; use the keyword form with `${geodesy_LIBRARIES}` PRIVATE (the archive is already inside the plugin) — `ais_layer/CMakeLists.txt:38-39`
 - [ ] (suggestion) Add a gtest that calls `initialize()` (LayeredCostmap, tf2_ros::Buffer, lifecycle node with parameter overrides; node type via `#if __has_include("nav2_ros_common/lifecycle_node.hpp")`: `nav2::LifecycleNode` vs `nav2_util::LifecycleNode`) and asserts parameters and the subscription, so the Jazzy CI job exercises a64e56e and 0e3a7cc, not only compiles them — `ais_layer/test/test_ais_layer.cpp`
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-19 12:51 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: owner
+**After**: publish
+**Decision**: address
+
+Asked "Publish now, or take the suggestions first?" with the pre-push review's verdict (round 1 approved, 0 must-fix, 5 suggestions) and the five suggestions quoted. The owner answered: "Address all five first (Recommended)". All five suggestions of the Local Review (Pre-Push) above are to be addressed before the branch is pushed.
