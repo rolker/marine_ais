@@ -418,3 +418,30 @@ Not asked again: the owner gave this answer in advance at the publish checkpoint
 - Jazzy build of the new assertion (API read on rclcpp `jazzy`, not compiled); CI on the PR will show it.
 
 Full pre-commit pass left to the host.
+
+## Local Review
+**Status**: complete
+**When**: 2026-11-19 14:16 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Dispatch**: resumed (agent aa657c595cfe6ad75, resume 3 of 3)
+**Verdict**: approved
+
+**PR**: #15 at `cf2236a`
+**Depth**: Standard (reason: adds `.github/workflows/ci.yml`; whole-PR classification, fix round)
+**Must-fix**: 0 | **Suggestions**: 0
+
+Re-review of c18c8f0, the only code change since the round-3 pre-push review. CI at `cf2236a`: build-and-test (jazzy) passed, and build-and-test (rolling, without ais_layer) passed. The PR has no review comments.
+
+Checked:
+- **The endpoint filter.** It keeps endpoints whose node name and namespace are the test node's and whose type is `marine_ais_msgs/msg/AISContact`. It is correct: the graph reports the bare node name, the namespace "/" and the demangled type.
+- **Jazzy API.** `get_subscriptions_info_by_topic` and `TopicEndpointInfo::node_name/node_namespace/topic_type` have been in rclcpp/rclcpp_lifecycle since Foxy, and the Jazzy CI job compiled and ran the test.
+- **The pid-suffixed name and the override tests.** `NodeOptions::parameter_overrides` do not depend on the node name; only `--ros-args -p node:param` would, and the file uses none.
+- **Linters.** ament_cpplint and ament_uncrustify on Rolling report no problems with the file.
+- **Round-3 finding.** Its premise holds for Jazzy, where the isolated runner keeps a `ROS_DOMAIN_ID` that is already set. It was overstated for Rolling, where the runner moved the test to its own domain anyway. That changes nothing: the new filter is correct either way.
+- **Dropped as already settled, not new, or out of scope:**
+  - Gemini rated a graph race as must-fix. Each test's layer and node are destroyed before the next test runs, Fast DDS and Cyclone update the local graph synchronously, and CI passed.
+  - Gemini's `if: always()`, explicit includes, the PIC check (settled by the Jazzy CI link) and pinning the action by SHA.
+  - Codex's `python3-transforms3d` (pre-existing), `persist-credentials`, notes on deviations from the plan, and a second-initialize endpoint count (`contact_subscriber_` is reassigned, so the old subscription is destroyed).
+
+### Findings
+- [ ] No issues found. LGTM.
