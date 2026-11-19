@@ -198,3 +198,27 @@ The revision resolves all five earlier findings, and the pinned tag, the geodesy
 **Decision**: proceed
 
 Asked "Implement this plan, with F1 to F3 handed to the implementer as corrections?" with the revised plan (32dfa8d) summarised and the second Plan Review's three low findings quoted (F1: the `version_gte` rationale claims a check that does not exist; F2: make the Jazzy job's colcon scope explicit and clone geographic_info shallow; F3: `${geodesy_INCLUDE_DIRS}` is PRIVATE, `${geodesy_LIBRARIES}` stays in the plain-signature `target_link_libraries` call). The owner answered: "Proceed (Recommended)". The three findings are corrections to the plan for the implementer.
+
+## Implementation
+**Status**: complete
+**When**: 2026-11-19 12:43 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Branch**: feature/issue-14 at `88038f4`
+
+Baseline on Rolling (before changes): `ais_layer` failed to configure ("Unknown CMake command \"ament_target_dependencies\""); `marine_ais_tools` warned "Unknown distribution option: 'tests_require'" and `colcon test` collected nothing ("NO TESTS RAN", exit 5); `marine_ais_msgs` xmllint failed ("Element 'test_depend': This element is not expected. Expected is one of ( member_of_group, export )").
+
+Code commits (one fix each, Jazzy-compatible forms):
+- `d7a90a0` marine_ais_tools/setup.py: `tests_require` to `extras_require={'test': ['pytest']}`.
+- `4e3187e` ais_parser.py: logger `.warn` to `.warning` (no other deprecated calls found).
+- `0053112` marine_ais_msgs/package.xml: `test_depend` before `member_of_group` (found by the baseline; not in the plan's list).
+- `b4dd9e1` ais_layer.cpp: `tf2/utils.h` to `tf2/utils.hpp`.
+- `623fdde` ais_layer/CMakeLists.txt: `ament_target_dependencies` removed; `${geodesy_INCLUDE_DIRS}` PRIVATE, `${geodesy_LIBRARIES}` in the existing plain `target_link_libraries` call.
+- `270ab39` ais_layer/package.xml: `<depend version_gte="1.0.7">geodesy</depend>` (documentation and a Debian Depends if released; not enforced by rosdep or colcon).
+- `a64e56e` ais_layer.cpp: local helper replaces `Layer::declareParameter`, removed from Nav2 on Rolling (navigation2 #5867); does what Jazzy's version did (`has_parameter`/`declare_parameter` on `getFullName`). Found by the build.
+- `0e3a7cc` ais_layer.cpp: `rclcpp::create_subscription(node, ...)` instead of the node member, which Rolling's `nav2::LifecycleNode` replaces with a (topic, callback, qos) signature. Found by the build.
+
+CI commit: `88038f4` `.github/workflows/ci.yml`, two jobs: `jazzy` (shallow clone of geographic_info tag 1.0.7, build `--packages-up-to` the three packages, test `--packages-select` the three) and `rolling` (msgs and tools only, `if: (github.base_ref || github.ref_name) != 'jazzy'`); header states the `ais_layer` Rolling gap.
+
+Final clean build and test on Rolling (underlay at /home/roland/project11/rolling/underlay): build "Summary: 3 packages finished"; `test_ais_layer` "[  PASSED  ] 35 tests.", `test_plugin_loading` "[  PASSED  ] 1 test.", ais_layer linters "100% tests passed, 0 tests failed out of 7", marine_ais_tools "27 passed", marine_ais_msgs "100% tests passed, 0 tests failed out of 3"; `colcon test-result --verbose`: "Summary: 90 tests, 0 errors, 0 failures, 4 skipped" (the 4 skipped are ament_cppcheck's own skips in ais_layer). `ldd -r libais_layer.so`: 0 undefined symbols; `geodesy::ECEFPoint::ECEFPoint(GeoPoint)` is defined in the library (geoconv linked statically).
+
+Not checked: Jazzy (not installed, no Docker), so the Jazzy forms of the code fixes and the workflow are shown only by CI on the PR. The workflow was not run; YAML parsed and read against marine_control's working file (no actionlint/yamllint installed). The tests do not call `onInitialize`, so the two Nav2 API fixes are shown by compilation only, not exercised at runtime. Left as is: `marine_ais_msgs` CMake deprecation warning (`cmake_minimum_required(VERSION 3.8)`, below 3.10) and an unused `tf_transformations` depend in marine_ais_tools/package.xml.
