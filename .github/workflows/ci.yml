@@ -6,13 +6,18 @@
 # keeps building there for the jazzy branch and for backports to it.
 # ais_layer includes geodesy/ecef.h, which geographic_info first released in
 # 1.0.7; the Jazzy release of geodesy is 1.0.6 and lacks it. So this job
-# clones geographic_info at tag 1.0.7 into the workspace and builds geodesy
-# only from it: COLCON_IGNORE in the clone's geographic_msgs and
+# clones geographic_info at commit f70b81a, which is tag 1.0.7 plus the one
+# upstream fix after it ("Adding missing include for setprecision", #64):
+# at the tag, ecef.h uses std::setprecision without <iomanip> and geodesy's
+# own ecef_conversions.cpp does not compile. The commit is pinned by SHA,
+# not by a branch or a mutable tag. The job builds geodesy
+# only from the clone: COLCON_IGNORE in the clone's geographic_msgs and
 # geographic_info folders hides them from rosdep and colcon, so rosdep's
 # --ignore-src skips only geodesy and installs the released geographic_msgs
 # (which nav2_msgs needs on Jazzy anyway; 1.0.6 and 1.0.7 differ only in
 # version and changelog). geodesy is built without its tests. Drop the
-# clone once Jazzy has a geographic_info release of 1.0.7 or later.
+# clone once Jazzy has a geographic_info release that includes #64 (the
+# first release after 1.0.7).
 #
 # Job "rolling" builds and tests marine_ais_msgs and marine_ais_tools only.
 # It does not build ais_layer: navigation2 (nav2_costmap_2d, nav2_util) has
@@ -64,12 +69,14 @@ jobs:
       - name: Create workspace
         run: mkdir -p ../ws/src && ln -s "$GITHUB_WORKSPACE" ../ws/src/marine_ais
 
-      - name: Clone geographic_info 1.0.7 (geodesy with ECEF support)
+      - name: Clone geographic_info at f70b81a (1.0.7 plus the iomanip fix)
         working-directory: ../ws
-        run: >
-          git clone --depth 1 --branch 1.0.7
-          https://github.com/ros-geographic-info/geographic_info.git
-          src/geographic_info
+        run: |
+          git init src/geographic_info
+          cd src/geographic_info
+          git remote add origin https://github.com/ros-geographic-info/geographic_info.git
+          git fetch --depth 1 origin f70b81a438172cd7a066dc1b18314d70e0eb6389
+          git checkout FETCH_HEAD
 
       - name: Build only geodesy from the clone
         working-directory: ../ws/src/geographic_info
