@@ -395,3 +395,26 @@ Asked "Publish now, or fix F1 first?" with the round 3 verdict (approved, 0 must
 **Decision**: address
 
 Not asked again: the owner gave this answer in advance at the publish checkpoint above, in his words "Publish, fix F1 with CI's results (Recommended)", where F1 is the one open finding of the Integrated Review (`ais_layer/test/test_initialize.cpp:120-122`, the `count_subscribers` assertion when `ROS_DOMAIN_ID` is set), and the option's stated meaning was that it "is fixed in the same round as whatever CI turns up, before the merge question". CI on pull request #15 turned up nothing (both jobs passed at dcb5905), so the round addresses that finding alone.
+
+## Implementation
+**Status**: complete
+**When**: 2026-11-19 14:10 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Dispatch**: resumed (agent aa67f71813bd80eb3, resume 2 of 3)
+
+**PR**: #15 at `c18c8f0`
+**Addressed**: Integrated Review at `dcb5905` (2026-11-19 14:04 -05:00)
+**Commits**: `c18c8f0` (code); `5d352cd` (box check)
+
+### Actions
+- [x] `count_subscribers` replaced by a check of the test node's own endpoint — `ais_layer/test/test_initialize.cpp:120-136`, `ais_layer/CMakeLists.txt` comment (`c18c8f0`). Before: `EXPECT_EQ(1u, node->count_subscribers("/ais_contacts"))` with the comment "counts only the layer's subscription". After: count the entries of `node->get_subscriptions_info_by_topic("/ais_contacts")` whose `node_name()`/`node_namespace()` are this node's and whose `topic_type()` is `marine_ais_msgs/msg/AISContact`, `EXPECT_EQ(1u, own_endpoints)`. The node name now has the process id appended (`ais_layer_initialize_test_<pid>`). The comment says what this proves: the middleware's graph lists exactly one AISContact subscription on the topic from this test's node. API checked against a shallow clone of ros2/rclcpp `jazzy` (rclcpp 28.1.23): `rclcpp_lifecycle::LifecycleNode::get_subscriptions_info_by_topic(const std::string &, bool no_mangle = false) const` (lifecycle_node.hpp:733); `TopicEndpointInfo::node_name()`, `node_namespace()`, `topic_type()` (node_graph_interface.hpp:78/88/98).
+
+### Checks
+- Negative (temporary edits, reverted): layer subscribing to `topic_ + "_broken"` → `own_endpoints` "Which is: 0", SubscribesOnTheConfiguredTopic FAILED; test resetting `contact_subscriber_` before the graph check → `own_endpoints` "Which is: 0", FAILED (topic-name assertion passed, so the graph check alone caught it).
+- `ROS_DOMAIN_ID=73` with `ros2 topic echo /ais_contacts marine_ais_msgs/msg/AISContact` alive in it (`ros2 topic info --no-daemon`: "Subscription count: 1"), and a temporary 5 s discovery wait in the test with the old assertion re-added: the old one failed with `node->count_subscribers("/ais_contacts")` "Which is: 2", and `own_endpoints` passed. Without the wait, the fixed test passed directly ("[  PASSED  ] 5 tests.") and under ctest ("100% tests passed, 0 tests failed out of 1"). On Rolling, the ctest run of the temporary version with the old assertion and the wait also passed, so the isolated runner used its own domain here despite `ROS_DOMAIN_ID` being set; the finding's description may match Jazzy's runner; not checked.
+- Clean build (`core_ws/build`, `install`, `log` removed): "Summary: 3 packages finished [17.5s]"; test.sh exit 0: `test_ais_layer` "[  PASSED  ] 35 tests.", `test_initialize` "[  PASSED  ] 5 tests.", `test_plugin_loading` "[  PASSED  ] 1 test.", ais_layer "100% tests passed, 0 tests failed out of 8", marine_ais_tools "27 passed", marine_ais_msgs "100% tests passed, 0 tests failed out of 3"; `colcon test-result --verbose`: "Summary: 99 tests, 0 errors, 0 failures, 5 skipped".
+
+### Not verified
+- Jazzy build of the new assertion (API read on rclcpp `jazzy`, not compiled); CI on the PR will show it.
+
+Full pre-commit pass left to the host.
