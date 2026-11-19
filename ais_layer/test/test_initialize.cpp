@@ -117,6 +117,8 @@ TEST_F(InitializeTest, SubscribesOnTheConfiguredTopic)
 
   ASSERT_NE(nullptr, layer.contact_subscriber_);
   EXPECT_STREQ("/ais_contacts", layer.contact_subscriber_->get_topic_name());
+  // The test runs in its own ROS domain (ament_add_ros_isolated_gtest), so
+  // this counts only the layer's subscription.
   EXPECT_EQ(1u, node->count_subscribers("/ais_contacts"));
 }
 
