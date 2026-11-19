@@ -70,3 +70,11 @@ Two questions were asked with the Issue Review's four Actions quoted. The owner'
 - Q2 "What CI should this issue add to `marine_ais`?": "B: Jazzy full, Rolling partial (Recommended)". The workflow's Jazzy leg builds and tests all three packages; its Rolling leg builds and tests `marine_ais_msgs` and `marine_ais_tools` only. `ais_layer` on Rolling is checked by hand on the development machine, and the gap is stated in the workflow and in the pull request.
 
 Also settled by the owner before this run: the records under `.agent/work-plans/issue-14/` are carried in the pull request to `rolling`; the backport to `jazzy` is done by hand outside the loop, by cherry-pick, with CI as its check.
+
+## Plan Authored
+**Status**: complete
+**When**: 2026-11-19 12:11 -05:00
+**By**: Claude Code Agent (claude-sonnet-5-5)
+**Plan**: `.agent/work-plans/issue-14/plan.md` at `014add3`
+
+One commit per Rolling fix (setup.py extras_require, logger warning, tf2/utils.hpp, geodesy via include/library variables since it exports no target), then a Jazzy+Rolling CI workflow (Rolling leg msgs+tools only) triggered on rolling and jazzy so it cherry-picks to jazzy; ais_layer on Rolling checked by hand.
