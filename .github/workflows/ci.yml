@@ -79,7 +79,7 @@ jobs:
         working-directory: ../ws
         run: >
           DEBIAN_FRONTEND=noninteractive
-          rosdep install --from-paths src --ignore-src -r -y
+          rosdep install --from-paths src --ignore-src -y
 
       - name: Build
         working-directory: ../ws
@@ -147,7 +147,7 @@ jobs:
           DEBIAN_FRONTEND=noninteractive
           rosdep install --from-paths
           src/marine_ais/marine_ais_msgs src/marine_ais/marine_ais_tools
-          --ignore-src -r -y
+          --ignore-src -y
 
       - name: Build
         working-directory: ../ws
