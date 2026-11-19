@@ -312,3 +312,29 @@ All five round-1 suggestions are addressed correctly (60177d0, 1c99696, ffb596c,
 ### Findings
 - [x] (must-fix) Jazzy job pins geographic_info tag `1.0.7`, whose `geodesy/include/geodesy/ecef.h` uses `std::setprecision` without `<iomanip>` (fixed upstream after the tag in f70b81a, the only commit after it). geodesy's own `src/conv/ecef_conversions.cpp` (in `geoconv`) fails at the tag: compiled here at tag 1.0.7, with `-std=gnu++17` and `-std=gnu++20`, against ROS message headers, it gives "'setprecision' is not a member of 'std'". So the first `colcon build --packages-select geodesy` will most likely fail on Jazzy. Pin the fixed commit (`git init` + `git fetch --depth 1 origin f70b81a438172cd7a066dc1b18314d70e0eb6389` + `git checkout FETCH_HEAD`), which also replaces the mutable tag with a SHA; update the step name and header comment — `.github/workflows/ci.yml:67-72`
 - [x] (suggestion) `EXPECT_EQ(1u, node->count_subscribers("/ais_contacts"))` counts the whole ROS graph on the default domain (`ament_add_gtest` does not isolate it), so any other `/ais_contacts` subscriber on the same `ROS_DOMAIN_ID` makes it 2. Drop it (line 119's `get_topic_name()` already proves the topic) or use `ament_add_ros_isolated_gtest` — `ais_layer/test/test_initialize.cpp:120`
+
+## Implementation
+**Status**: complete
+**When**: 2026-11-19 13:10 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Dispatch**: resumed (agent aa67f71813bd80eb3, resume 1 of 3)
+
+**Branch**: feature/issue-14 at `256616e`
+**Addressed**: Local Review (Pre-Push) at `fd49071` (2026-11-19 13:07 -05:00)
+**Commits**: `9d4f924` (CI); `8ae3f2f`, `97e9311` (code); `256616e` (box checks)
+
+### Actions
+- [x] (must-fix) Jazzy job now fetches geographic_info at f70b81a438172cd7a066dc1b18314d70e0eb6389 by SHA (`git init`, `git fetch --depth 1 origin <sha>`, `git checkout FETCH_HEAD`); step name and header comment updated: the commit is 1.0.7 plus upstream #64, and the clone can be dropped once Jazzy has a geographic_info release that includes #64 — `.github/workflows/ci.yml` (`9d4f924`). Reproduced first: `git archive` of `geodesy` at tag 1.0.7 and at f70b81a from the underlay clone into the scratchpad; `g++ 15.2 -fsyntax-only src/conv/ecef_conversions.cpp` against /opt/ros/rolling and underlay geographic_msgs headers, gnu++17 and gnu++20: tag "ecef.h:135:26: error: ‘setprecision’ is not a member of ‘std’" (and :143:15), rc=1; f70b81a rc=0 for both. The fetch-by-SHA sequence was run against GitHub in the scratchpad: checks out "f70b81a Adding missing include for setprecision (#64)", `ecef.h:38 #include <iomanip>`, `<version>1.0.7</version>`.
+- [x] geodesy floor: one comment above `find_package(geodesy 1.0.7 REQUIRED)` says the floor is necessary, not sufficient (the 1.0.7 tag needs #64, f70b81a still reports 1.0.7) — `ais_layer/CMakeLists.txt:13` (`8ae3f2f`). `<depend version_gte="1.0.7">` left as is; nothing claims the floor guarantees a working geodesy.
+- [x] (suggestion) Kept the `count_subscribers` assertion and isolated the test with `ament_add_ros_isolated_gtest` plus `<test_depend>ament_cmake_ros</test_depend>` — `ais_layer/CMakeLists.txt`, `ais_layer/package.xml`, `ais_layer/test/test_initialize.cpp:120` (`97e9311`). This is the stronger choice: `get_topic_name()` checks only the local object, and the count also checks that the middleware sees the subscription. Jazzy: `rosdep resolve --rosdistro jazzy --os ubuntu:noble ament_cmake_ros` gives `ros-jazzy-ament-cmake-ros`. A shallow clone of ros2/ament_cmake_ros `jazzy` (0.12.2) has `ament_add_ros_isolated_gtest.cmake` (a wrapper around `ament_add_gtest` with RUNNER `run_test_isolated.py`). The generated CTest command runs `run_test_isolated.py`.
+
+### Checks (Rolling, clean build: `core_ws/build`, `install`, `log` removed)
+- build.sh: "Summary: 3 packages finished [17.3s]".
+- test.sh exit 0: `test_ais_layer` "[  PASSED  ] 35 tests.", `test_initialize` "[  PASSED  ] 5 tests.", `test_plugin_loading` "[  PASSED  ] 1 test.", ais_layer "100% tests passed, 0 tests failed out of 8", marine_ais_tools "27 passed", marine_ais_msgs "100% tests passed, 0 tests failed out of 3".
+- `colcon test-result --verbose`: "Summary: 99 tests, 0 errors, 0 failures, 5 skipped" (cppcheck's per-file skips).
+
+### Not verified
+- The Jazzy build: whether tag 1.0.7 also fails under Noble's GCC 13 (shown only on GCC 15 here; the pin is correct either way), the workflow's fetch step in the CI container, and `run_test_isolated.py` on Jazzy.
+- No demonstration that the un-isolated count fails: an outside `ros2 topic echo /ais_contacts` subscriber on the default domain did not change the count, probably because discovery had not reached it yet. So the shared-domain risk is a race, not a fixed failure.
+
+Full pre-commit pass left to the host.
