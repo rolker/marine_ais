@@ -17,7 +17,7 @@
 #include "marine_ais_msgs/msg/navigational_status.hpp"
 #include "nav2_costmap_2d/cost_values.hpp"
 #include "pluginlib/class_list_macros.hpp"
-#include "tf2/utils.h"
+#include "tf2/utils.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 PLUGINLIB_EXPORT_CLASS(ais_layer::AISLayer, nav2_costmap_2d::Layer)
