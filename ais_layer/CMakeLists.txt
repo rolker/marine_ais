@@ -35,17 +35,22 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 # geoconv library (which defines geodesy::ECEFPoint), so use its variables.
 target_include_directories(${PROJECT_NAME} PRIVATE ${geodesy_INCLUDE_DIRS})
 
+# PUBLIC: what include/ais_layer/ais_layer.hpp uses. PRIVATE: what only
+# src/ uses; geoconv is a static archive linked into the plugin, so it stays
+# out of the exported target's link interface.
 target_link_libraries(${PROJECT_NAME}
-  ${geodesy_LIBRARIES}
-  ${geographic_msgs_TARGETS}
-  ${geometry_msgs_TARGETS}
-  ${marine_ais_msgs_TARGETS}
-  nav2_costmap_2d::nav2_costmap_2d_core
-  pluginlib::pluginlib
-  rclcpp::rclcpp
-  tf2::tf2
-  tf2_geometry_msgs::tf2_geometry_msgs
-  tf2_ros::tf2_ros
+  PUBLIC
+    ${geographic_msgs_TARGETS}
+    ${geometry_msgs_TARGETS}
+    ${marine_ais_msgs_TARGETS}
+    nav2_costmap_2d::nav2_costmap_2d_core
+    rclcpp::rclcpp
+  PRIVATE
+    ${geodesy_LIBRARIES}
+    pluginlib::pluginlib
+    tf2::tf2
+    tf2_geometry_msgs::tf2_geometry_msgs
+    tf2_ros::tf2_ros
 )
 
 install(
