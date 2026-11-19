@@ -93,8 +93,10 @@ if(BUILD_TESTING)
 
   # The lifecycle node is nav2_util's on Jazzy and nav2_ros_common's on
   # Rolling; the latter comes through nav2_costmap_2d_core, so no
-  # distro-specific package is named here.
-  ament_add_gtest(test_initialize test/test_initialize.cpp)
+  # distro-specific package is named here. Isolated (its own ROS domain),
+  # because it counts the subscribers on a topic of the ROS graph.
+  find_package(ament_cmake_ros REQUIRED)
+  ament_add_ros_isolated_gtest(test_initialize test/test_initialize.cpp)
   target_link_libraries(test_initialize
     ${PROJECT_NAME}
     nav2_costmap_2d::nav2_costmap_2d_core
