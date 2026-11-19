@@ -55,3 +55,18 @@ issue: 14
 - [ ] Add the workflow on `rolling` and take it to `jazzy` in the backport PR, so the backport has CI as its check (the owner has said it is done by cherry-pick with CI as its check).
 - [ ] Confirm the `geodesy` form on both distros (exported target versus keeping `ament_target_dependencies`, which is gone on Rolling) and that `tf2/utils.hpp` exists on Jazzy, before claiming the fixes build on both.
 - [ ] Confirm the `.warn(` at `ais_parser.py:329` is on an rclpy logger (`self.get_logger()`; it is) and grep for other deprecated calls, so "all three packages build and pass" is verified rather than assumed.
+
+## Checkpoint
+**Status**: complete
+**When**: 2026-11-19 12:10 -05:00
+**By**: Claude Code Agent (claude-fable-5-2)
+**Decided-by**: owner
+**After**: issue-actions
+**Decision**: proceed
+
+Two questions were asked with the Issue Review's four Actions quoted. The owner's answers, verbatim:
+
+- Q1 "Go on to planning with F1 to F4 handed to the planner, and your Q2 answer as the CI decision?": "Proceed (Recommended)".
+- Q2 "What CI should this issue add to `marine_ais`?": "B: Jazzy full, Rolling partial (Recommended)". The workflow's Jazzy leg builds and tests all three packages; its Rolling leg builds and tests `marine_ais_msgs` and `marine_ais_tools` only. `ais_layer` on Rolling is checked by hand on the development machine, and the gap is stated in the workflow and in the pull request.
+
+Also settled by the owner before this run: the records under `.agent/work-plans/issue-14/` are carried in the pull request to `rolling`; the backport to `jazzy` is done by hand outside the loop, by cherry-pick, with CI as its check.
