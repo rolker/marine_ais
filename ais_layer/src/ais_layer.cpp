@@ -414,8 +414,10 @@ void AISLayer::onInitialize()
   contact_cost_ = static_cast<unsigned char>(contact_cost);
   envelope_edge_cost_ = static_cast<unsigned char>(envelope_edge_cost);
 
-  contact_subscriber_ = node->create_subscription<marine_ais_msgs::msg::AISContact>(
-    topic_, rclcpp::QoS(50),
+  // rclcpp's free function, not the node's member: Nav2 on Rolling wraps the
+  // member with a (topic, callback, qos) signature that Jazzy does not have.
+  contact_subscriber_ = rclcpp::create_subscription<marine_ais_msgs::msg::AISContact>(
+    node, topic_, rclcpp::QoS(50),
     std::bind(&AISLayer::contactCallback, this, std::placeholders::_1));
 
   parameter_callback_ = node->add_on_set_parameters_callback(
