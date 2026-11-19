@@ -338,3 +338,25 @@ All five round-1 suggestions are addressed correctly (60177d0, 1c99696, ffb596c,
 - No demonstration that the un-isolated count fails: an outside `ros2 topic echo /ais_contacts` subscriber on the default domain did not change the count, probably because discovery had not reached it yet. So the shared-domain risk is a race, not a fixed failure.
 
 Full pre-commit pass left to the host.
+
+## Local Review (Pre-Push)
+**Status**: complete
+**When**: 2026-11-19 13:16 -05:00
+**By**: Claude Code Agent (claude-opus-5-5)
+**Dispatch**: resumed (agent aa657c595cfe6ad75, resume 2 of 3)
+**Verdict**: approved
+
+**Branch**: feature/issue-14 at `9419442`
+**Base**: origin/rolling
+**Depth**: Standard (reason: adds `.github/workflows/ci.yml`; whole-diff classification, fix round)
+**Must-fix**: 0 | **Suggestions**: 1
+**Round**: 3 | **Ship**: recommended — no must-fix findings; remaining suggestions can be applied or tracked
+
+Both round-2 boxes are addressed (9d4f924, 8ae3f2f, 97e9311). Checked:
+- The fetch-by-SHA step, run as written in a scratch directory (since deleted): `git fetch --depth 1 origin f70b81a4…` from GitHub succeeded, `ecef.h` has `#include <iomanip>`, and the top-level folders are `geodesy`, `geographic_info` and `geographic_msgs`. After the COLCON_IGNORE step, `colcon list` shows only geodesy.
+- `run: |` runs as `bash -e`, so the `cd` carries through the step.
+- `ament_add_ros_isolated_gtest` exists in Rolling's ament_cmake_ros, and the build's CTest file runs `test_initialize` through `run_test_isolated.py` (5 tests, 0 failures). On Jazzy, `ament_cmake_ros` resolves through rosdep as `ros-jazzy-ament-cmake-ros` (0.12.x has the function); this was read from source, not built.
+- Out of scope, not raised: Codex again proposed declaring `python3-transforms3d` in marine_ais_tools. This is pre-existing and could be a follow-up issue.
+
+### Findings
+- [ ] (suggestion) The isolated runner picks a free domain only when `ROS_DOMAIN_ID` is unset; with it set (common on robot and dev machines) the test uses that domain, so another `/ais_contacts` subscriber there still makes `count_subscribers` 2, and the comment "counts only the layer's subscription" overstates it. CI is unaffected. Drop the assertion (line 120's `get_topic_name()` already proves the topic) or narrow the comment — `ais_layer/test/test_initialize.cpp:120-122`
